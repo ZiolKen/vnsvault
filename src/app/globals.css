@@ -1,0 +1,342 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design Tokens ────────────────────────────────────────── */
+:root {
+  --obsidian:     #09090f;
+  --vault:        #0f0f1a;
+  --surface:      #13131f;
+  --border:       #1e1e30;
+  --copper:       #b87333;
+  --copper-light: #d4956a;
+  --gold:         #c9a84c;
+  --muted:        #5a5a7a;
+  --dim:          #3a3a55;
+  --ghost:        #e0e0f0;
+  --ghost-dim:    #9090b0;
+}
+
+/* ── Base ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+body {
+  background-color: var(--obsidian);
+  color: var(--ghost);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* Prevent layout shift from scrollbar */
+html { overflow-y: scroll; }
+
+/* ── Typography ───────────────────────────────────────────── */
+/* Cinzel covers Latin Basic/Extended-A only — no Vietnamese glyphs.
+   Use font-cinzel ONLY for known-Latin text (VNSVault brand, "VN" badge, numbers).
+   Use font-heading for all headings/titles that may contain Vietnamese. */
+.font-cinzel {
+  font-family: var(--font-cinzel), var(--font-cormorant), var(--font-playfair), Georgia, serif;
+}
+
+/* font-heading: Cormorant Garamond loads its dedicated `vietnamese` subset via
+   next/font, so Vietnamese diacritical marks render natively — no mixed-font
+   glyph mismatch and no extra request to Google Fonts at runtime. */
+.font-heading {
+  font-family: var(--font-cormorant), var(--font-playfair), Georgia, serif;
+}
+
+/* ── Focus visible (a11y) ─────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--copper);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--vault); }
+::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--copper); }
+* { scrollbar-width: thin; scrollbar-color: var(--dim) var(--vault); }
+
+/* ── Selection ────────────────────────────────────────────── */
+::selection { background: rgba(184,115,51,0.35); color: var(--ghost); }
+
+/* ── Glow effects ─────────────────────────────────────────── */
+.glow-copper { box-shadow: 0 0 24px rgba(184,115,51,0.35), 0 0 64px rgba(184,115,51,0.1); }
+.text-glow-copper { text-shadow: 0 0 30px rgba(212,149,106,0.55); }
+.ring-copper { box-shadow: 0 0 0 2px var(--copper); }
+
+/* ── Glass morphism ───────────────────────────────────────── */
+.glass {
+  background: rgba(15,15,26,0.78);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(30,30,48,0.7);
+}
+
+/* ── Horizontal scroll strip ──────────────────────────────── */
+.scroll-x { overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.scroll-x::-webkit-scrollbar { display: none; }
+
+/* ── Image overlay gradient ───────────────────────────────── */
+.vault-overlay { position: relative; }
+.vault-overlay::after {
+  content: '';
+  position: absolute;
+  /* -1px on all sides prevents sub-pixel rendering gaps at rounded edges */
+  inset: -1px;
+  background: linear-gradient(
+    to top,
+    rgba(9,9,15,1)    0%,
+    rgba(9,9,15,1)    12%,
+    rgba(9,9,15,0.3)  55%,
+    transparent       100%
+  );
+  pointer-events: none;
+}
+
+/* ── Animations ───────────────────────────────────────────── */
+.fade-in  { animation: fadeIn  0.4s var(--ease-out-quart) both; }
+.fade-in-slow { animation: fadeIn 0.7s var(--ease-out-quart) both; }
+.slide-up { animation: slideUp 0.35s var(--ease-out-quart) both; }
+.scale-in { animation: scaleIn 0.22s var(--ease-out-quart) both; }
+.scale-out { animation: scaleOut 0.15s ease-in both; }
+
+/* Custom easing — a gentler "decelerate" curve than ease-out, closer to
+   what Framer Motion's default spring feels like, without the JS/bundle
+   cost of a spring physics library. */
+:root {
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes fadeIn  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.96) translateY(4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes scaleOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.97); } }
+@keyframes shimmer {
+  0%   { background-position: -800px 0; }
+  100% { background-position: 800px 0; }
+}
+@keyframes toastIn  { from { opacity: 0; transform: translateY(-12px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes toastOut { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-8px) scale(0.95); } }
+
+/* Tactile press feedback for any clickable surface — cheap, no-dependency
+   substitute for the "whileTap" micro-interaction Framer Motion is usually
+   reached for. */
+.press-scale { transition: transform 0.12s var(--ease-out-quart); }
+.press-scale:active { transform: scale(0.96); }
+
+/* Staggered reveal for lists/grids: put `.stagger-child` on each item and
+   set `style={{ '--stagger-index': i }}` — each item's fade-in delays a
+   little more than the last. Falls back to no delay if the var is unset. */
+.stagger-child {
+  animation: slideUp 0.4s var(--ease-out-quart) both;
+  animation-delay: calc(var(--stagger-index, 0) * 60ms);
+}
+
+/* ── Skeleton loader ──────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--vault) 50%, var(--surface) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+  border-radius: 6px;
+}
+
+/* ── Card base ────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+}
+.card:hover {
+  border-color: rgba(184,115,51,0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(184,115,51,0.1);
+}
+
+/* ── Button base ──────────────────────────────────────────── */
+.btn-copper {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: var(--copper);
+  color: var(--obsidian);
+  font-weight: 600;
+  border-radius: 0.5rem;
+  transition: background 0.2s, box-shadow 0.2s;
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+.btn-copper:hover {
+  background: var(--copper-light);
+  box-shadow: 0 4px 20px rgba(184,115,51,0.35);
+}
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: transparent;
+  color: var(--ghost-dim);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  transition: border-color 0.2s, color 0.2s;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+.btn-ghost:hover { border-color: rgba(184,115,51,0.45); color: var(--ghost); }
+
+.btn-danger {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: rgba(239,68,68,0.12);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.35);
+  font-weight: 600;
+  border-radius: 0.5rem;
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+.btn-danger:hover { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.55); }
+
+/* ── Status badge base ────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* ── Input base ───────────────────────────────────────────── */
+.input-base {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  color: var(--ghost);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+  width: 100%;
+  outline: none;
+}
+.input-base:focus { border-color: var(--copper); }
+.input-base::placeholder { color: var(--muted); }
+.input-base[aria-invalid="true"] {
+  border-color: rgba(239,68,68,0.6);
+}
+.input-base[aria-invalid="true"]:focus {
+  border-color: rgba(239,68,68,0.8);
+  outline-color: rgba(239,68,68,0.6);
+}
+
+/* ── Toast stack ──────────────────────────────────────────── */
+.toast-stack {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(360px, calc(100vw - 2rem));
+}
+@media (pointer: coarse) {
+  .toast-stack { top: auto; bottom: 1rem; right: 1rem; left: 1rem; width: auto; }
+}
+
+/* ── Mobile utility ───────────────────────────────────────── */
+@media (max-width: 640px) {
+  .hide-mobile { display: none !important; }
+  .text-mobile-sm { font-size: 0.8125rem !important; }
+}
+
+/* ── Drawer overlay ───────────────────────────────────────── */
+.drawer-overlay {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* ── Breadcrumb ───────────────────────────────────────────── */
+.breadcrumb {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-orient: horizontal;
+  -webkit-box-direction: normal;
+  -webkit-flex-direction: row;
+  -ms-flex-direction: row;
+  flex-direction: row;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  -ms-flex-align: center;
+  align-items: center;
+  gap: 0.375rem;
+  -webkit-flex-wrap: nowrap;
+  -ms-flex-wrap: nowrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.breadcrumb a {
+  -webkit-flex-shrink: 0;
+  -ms-flex-negative: 0;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+.breadcrumb a:hover { color: var(--copper-light); }
+.breadcrumb > span {
+  color: var(--dim);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  -ms-flex-negative: 0;
+  flex-shrink: 0;
+}
+/* Last span (current page title) may truncate */
+.breadcrumb > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-flex-shrink: 1;
+  -ms-flex-negative: 1;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* ── Line clamp ───────────────────────────────────────────── */
+.line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+.line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+
+/* ── Divider ──────────────────────────────────────────────── */
+.divider { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+
+/* ── Touch target minimum (mobile a11y) ───────────────────── */
+@media (pointer: coarse) {
+  button, [role="button"], a { min-height: 44px; min-width: 44px; }
+  nav a { min-height: 48px; }
+}
+
+/* ── Reduced motion ───────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

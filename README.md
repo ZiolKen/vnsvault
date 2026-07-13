@@ -18,15 +18,7 @@ Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Aiven
 - **ISR** — homepage cache 5 phút, sitemap cache 1 giờ
 - **SEO** — metadata, canonical URL, sitemap.xml, robots.txt tự động
 - **PWA** — web app manifest
-- **UI kit dùng chung** — `Button` / `FormField` / `Modal` / `Toast` (`src/components/ui`) chuẩn hoá spinner, focus trap, a11y (aria-invalid/aria-describedby) từng bị lặp/khác nhau giữa các form
-- **Bảo mật**
-  - CSP, HSTS, X-Frame-Options và các security header khác trên mọi response (`next.config.ts`)
-  - Cloudflare Turnstile bot protection trên đăng ký / đăng nhập / đổi mật khẩu / đề xuất-vote / báo lỗi link
-  - **Edge middleware** (`src/middleware.ts`) chặn thêm 3 lớp trước khi request chạm route handler:
-    1. Chặn path scanner/probe phổ biến (`.env`, `.git`, `wp-admin`, `phpmyadmin`, …) → trả 404 ngay tại edge
-    2. Chặn ghi cross-site vào `/api` (so khớp `Origin` với host hiện tại) — CSRF defense cho mọi method POST/PUT/PATCH/DELETE
-    3. Rate-limit theo route cho `/api/*` (in-memory, per-instance — xem giới hạn ở mục **Known Limitations**)
-  - `requireFreshAdmin` — mọi API admin-only re-check role trong DB ở mỗi request thay vì tin JWT 7 ngày tuổi, để revoke quyền admin có hiệu lực ngay lập tức thay vì phải đợi token hết hạn
+- **Bảo mật** — CSP, HSTS, Cloudflare Turnstile bot protection trên form đăng ký / đăng nhập
 
 ---
 
@@ -63,6 +55,62 @@ SHARD_1 (Aiven acc B) ─┼─ ShardedDb.fanOut() ─── App
 SHARD_2 (Aiven acc C) ─┘
 ```
 
+### Write-Shard Pointer (Redis + Cron)
+
+Việc chọn shard nào để WRITE cần biết dung lượng hiện tại của từng shard
+(`pg_database_size()`), nhưng gọi hàm đó trên mỗi request là chậm và tốn kết
+nối. Kiến trúc hiện tại:
+
+```
+cron-job.org (external, mỗi 5 phút)
+        │  GET + header "Authorization: Bearer $CRON_SECRET"
+        ▼
+GET /api/internal/shard-check   ← nơi DUY NHẤT còn gọi pg_database_size()
+        │  chạy sweep 1 lần trên mọi shard
+        ▼
+Redis: SET shard:write-target=<index>   (TTL 15 phút)
+        │
+        ▼
+pickWriteShardIndex() trong db/index.ts
+  1. Cache in-memory (30s + jitter) — nếu còn hạn, dùng luôn, khỏi động tới Redis
+  2. Cache nguội → GET shard:write-target từ Redis (vài ms, không có
+     pg_database_size nào chạy trên request path)
+  3. Redis chưa cấu hình / lỗi / giá trị không hợp lệ → fallback về sweep
+     pg_database_size trực tiếp (hành vi gốc trước khi có Redis — chậm hơn,
+     không hỏng)
+```
+
+Redis dùng **Upstash qua Vercel Marketplace** (không phải tài khoản Upstash
+riêng) — xem biến `KV_REST_API_URL` / `KV_REST_API_TOKEN` ở mục Environment
+Variables bên dưới. Nếu chưa setup Redis, tính năng này tự tắt và app quay
+lại sweep trực tiếp như trước — không crash.
+
+**Vì sao dùng cron-job.org thay vì `crons` của Vercel:** Vercel Hobby chỉ
+cho cron *của chính Vercel* chạy tối đa **1 lần/ngày** — đặt lịch dày hơn
+(`*/5 * * * *` chẳng hạn) trong `vercel.json` sẽ khiến **deploy fail hoàn
+toàn**, không phải warning, và bản thân Vercel Cron trên Hobby cũng không
+đảm bảo chạy đúng phút. `/api/internal/shard-check` chỉ là 1 route HTTP
+bình thường được xác thực bằng `CRON_SECRET`, nên gọi từ bên ngoài không
+bị giới hạn đó — vẫn cùng 1 route, cùng 1 cách xác thực, chỉ đổi ai gọi.
+Không dùng GitHub Actions vì lịch trong repo private/public free có xu
+hướng bị delay 10–30 phút lúc GitHub tải cao (nhiều report trong 2026), và
+tự tắt sau 60 ngày repo không có commit — im lặng, dễ bỏ sót.
+
+**Setup trên cron-job.org** (miễn phí):
+1. Đăng ký / đăng nhập [cron-job.org](https://cron-job.org)
+2. Tạo cronjob mới:
+   - **URL**: `https://<domain-production-của-bạn>/api/internal/shard-check`
+   - **Method**: GET
+   - **Schedule**: mỗi 5 phút (`minutes: 0,5,10,...`)
+   - **Custom header**: `Authorization` → `Bearer <giá-trị-CRON_SECRET>` (cùng giá trị đã set trong Vercel env vars)
+3. Set `CRON_SECRET` trong Vercel env vars trước (xem mục Environment Variables) — cron-job.org KHÔNG tự biết giá trị này, phải copy tay
+4. Lưu, kiểm tra tab "History" trên cron-job.org để xác nhận nhận được `200 { "success": true, "writeTarget": N }`
+
+> Nếu sau này gỡ cron-job.org và muốn quay lại `crons` trong `vercel.json`
+> (vd khi nâng lên Vercel Pro), nhớ cân lại
+> `SHARD_WRITE_TARGET_TTL_SECONDS` trong `src/lib/redis.ts` cho khớp lịch
+> mới — 2 giá trị này là một cặp, không có gì tự đồng bộ giúp.
+
 ---
 
 ## Getting Started
@@ -75,7 +123,7 @@ SHARD_2 (Aiven acc C) ─┘
 ### 1. Clone & cài dependencies
 
 ```bash
-git clone https://github.com/ZiolKen/vnsvault.git
+git clone https://github.com/yourname/vnsvault.git
 cd vnsvault
 npm install
 ```
@@ -150,14 +198,20 @@ Nếu không set `PGCA_N`, shard đó vẫn dùng TLS encrypted nhưng bỏ qua 
 | `NEXT_PUBLIC_BASE_URL` | `http://localhost:3000` | URL công khai của site — dùng cho canonical URL và SEO metadata |
 | `BBMKTS_TOKEN` | *(hard-coded fallback trong code)* | Token dapi của bbmkts.com dùng để wrap link tải cho tài khoản không phải VIP (xem `src/lib/linkShortener.ts`). ⚠️ Nếu không set, code dùng token mặc định đã hard-code sẵn — **nên set biến này trước khi deploy prod** để có thể đổi token mà không cần sửa code, và để token thật không nằm trong Git history |
 
----
+### Redis (Upstash qua Vercel Marketplace)
 
-## Known Limitations (đọc trước khi scale traffic)
+Dùng cho write-shard pointer — xem [Write-Shard Pointer (Redis + Cron)](#write-shard-pointer-redis--cron) ở trên. Cài "Upstash" từ **Vercel Marketplace** (KHÔNG dùng tài khoản Upstash riêng — tên biến khác nhau, xem comment trong `src/lib/redis.ts`), Vercel sẽ tự điền các biến này.
 
-- **Rate limiter là in-memory, per-instance** (`src/lib/rateLimit.ts`). Trên Vercel Node runtime, mỗi instance serverless giữ counter riêng — traffic bị phân tán qua nhiều instance có thể vượt giới hạn danh nghĩa khoảng (số instance)×. Đủ dùng làm lớp chặn đầu tiên, **không phải hard guarantee**. Muốn chặn chuẩn ở scale lớn: chuyển sang Vercel KV / Upstash Redis (`INCR` + `EXPIRE`) để mọi instance share chung 1 counter.
-- **`getClientIp()` tin `x-forwarded-for` đầu tiên trong header.** Đúng nếu Vercel là proxy edge duy nhất (Vercel tự set header này, client không ghi đè được). Nếu sau này thêm một CDN/WAF khác (vd. Cloudflare) đứng **trước** Vercel, cần đổi sang đọc đúng hop được platform đó tin cậy — lấy nhầm hop đầu tiên lúc đó sẽ cho phép client tự spoof IP và bypass rate limit.
-- **Download counter (`download_count`) là fire-and-forget** (`db.fanOut(...).catch(...)` không `await`) trong `/api/games/[slug]/download/[downloadId]`. Trên Node serverless, không có gì đảm bảo promise này chạy xong trước khi instance bị freeze sau khi response đã trả về — counter có thể bị undercount lặt vặt. Không ảnh hưởng luồng tải chính; nếu cần số liệu chính xác 100%, cân nhắc `await` trực tiếp (thêm ~vài chục ms) hoặc dùng `after()` từ `next/server`.
-- **GET có side-effect:** endpoint tải game (`GET /api/games/[slug]/download/[downloadId]`) tăng `download_count` và có thể redirect sang bbmkts trên một request `GET`. Vì `middleware.ts` chỉ áp same-origin check cho POST/PUT/PATCH/DELETE, một trang bên ngoài có thể nhúng request này để buộc trình duyệt người dùng đã đăng nhập gọi tới — hậu quả chỉ là tăng lệch counter / redirect ngoài ý muốn, không rò rỉ dữ liệu hay chiếm quyền tài khoản, nhưng nếu muốn chặt hơn có thể chuyển endpoint này sang POST.
+| Variable | Required? | Description |
+|---|---|---|
+| `KV_REST_API_URL` | Có (để bật tính năng này) | Upstash REST endpoint |
+| `KV_REST_API_TOKEN` | Có (để bật tính năng này) | Upstash REST token |
+| `KV_URL` | Không dùng tới | Vercel vẫn set kèm, app không đọc biến này |
+| `REDIS_URL` | Không dùng tới | Vercel vẫn set kèm, app không đọc biến này |
+| `KV_REST_API_READ_ONLY_TOKEN` | Không dùng tới | Vercel vẫn set kèm, app không đọc biến này |
+| `CRON_SECRET` | Nên set ở production | Bảo vệ `/api/internal/shard-check`. Set trong Vercel env vars, rồi copy tay cùng giá trị vào custom header của job trên cron-job.org (xem [Write-Shard Pointer](#write-shard-pointer-redis--cron)) — không có gì tự động đồng bộ 2 bên. Tạo bằng `openssl rand -base64 32` |
+
+Không set `KV_REST_API_URL`/`KV_REST_API_TOKEN`? App tự fallback về sweep `pg_database_size` trực tiếp như trước khi có Redis — không crash, chỉ chậm hơn.
 
 ---
 
@@ -200,15 +254,18 @@ src/
 │       ├── admin/            # admin-only API (games, reports, requests)
 │       ├── account/          # avatar, password, bookmarks
 │       ├── requests/         # vote
+│       ├── internal/         # shard-check (cron-only, see Write-Shard Pointer)
 │       └── health/           # health check
 ├── components/
 │   ├── games/                # GameCard, BookmarkButton, DownloadButton, ...
 │   ├── admin/                # GameForm
+│   ├── ui/                   # FormField, Button, Toast, Modal
 │   └── layout/               # Navbar, Footer
 ├── lib/
 │   ├── db/
 │   │   ├── index.ts          # ShardedDb class
 │   │   └── schema.sql        # Database schema
+│   ├── redis.ts              # Upstash Redis client + write-shard pointer key/TTL
 │   ├── queries.ts            # Server-side query helpers
 │   ├── auth.ts               # Auth barrel re-export
 │   ├── jwt.ts                # JWT utils (Edge-safe)
@@ -243,6 +300,8 @@ scripts/
 
 - Build dùng `experimental.cpus: 3` để giới hạn worker song song, tránh vượt `max_connections` của Aiven
 - Pool size mỗi shard giới hạn ở `max: 2` (xem `src/lib/db/index.ts`). Lưu ý: đây là ceiling **cho mỗi instance function** — Vercel serverless spin nhiều instance song song khi traffic tăng, và các instance KHÔNG share pool với nhau, nên tổng connection thực tế là `N instance đang chạy × max × số shard`, không chỉ đơn thuần `cpus × max`. Với `max: 2` và vài shard, mức này vẫn đủ margin dưới limit 20 connection của Aiven free tier trong điều kiện traffic bình thường, nhưng traffic tăng đột biến vẫn có thể cần theo dõi thêm
+- **Shard-check cron** (`/api/internal/shard-check`) được trigger bởi **cron-job.org** (external, mỗi 5 phút) chứ không phải `crons` trong `vercel.json` — Vercel Hobby chỉ cho cron của chính Vercel chạy tối đa 1 lần/ngày, xem [Write-Shard Pointer](#write-shard-pointer-redis--cron) ở trên để biết lý do và cách setup
+- Set `CRON_SECRET` trong Vercel env vars **trước** khi tạo job trên cron-job.org, rồi copy đúng giá trị đó vào custom header `Authorization: Bearer ...` của job — 2 bên không tự đồng bộ, quên set thì route bỏ qua xác thực (không an toàn cho production)
 
 ---
 

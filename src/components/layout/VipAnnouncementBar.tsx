@@ -44,7 +44,7 @@ export default function VipAnnouncementBar() {
       <div className="max-w-7xl mx-auto px-4 py-2 flex items-center gap-3">
         <span className="text-base shrink-0" aria-hidden="true">👑</span>
         <p className="flex-1 min-w-0 text-xs sm:text-sm text-ghost-dim truncate">
-          <span className="text-copper-light font-semibold">Đã mở gói VIP</span>
+          <span className="text-copper-light font-semibold">Đã có gói VIP</span>
           {' '}— tải game trực tiếp, không cần vượt link quảng cáo.{' '}
           <Link href="/donate" className="underline hover:text-copper-light whitespace-nowrap">
             Đăng ký ngay →

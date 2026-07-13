@@ -67,8 +67,27 @@ export function rateLimit(key: string, options: RateLimitOptions = {}): RateLimi
   return { success: true, remaining: max - bucket.count };
 }
 
-/** Best-effort client IP extraction behind Vercel's proxy chain. */
+/**
+ * Best-effort client IP extraction.
+ *
+ * Every other IP-consuming route in this codebase (login, register,
+ * report-link, vote, password-change) checks `cf-connecting-ip` before
+ * `x-forwarded-for` — meaning Cloudflare fronts this deployment. This
+ * function used to check `x-forwarded-for` ONLY, which behind Cloudflare
+ * is Cloudflare's own edge IP (or an attacker-influenced value), not the
+ * visitor's — every visitor would collapse into the SAME rate-limit
+ * bucket, so one abusive user exhausting the shared bucket would lock out
+ * every other Cloudflare-routed visitor too. Matching the header priority
+ * already established elsewhere fixes that.
+ *
+ * `x-forwarded-for` is still checked as a fallback for the no-Cloudflare
+ * case (local dev, direct-to-Vercel preview deploys): Vercel's own edge
+ * overwrites this header with the real connecting IP rather than
+ * forwarding a client-supplied one, so it's trustworthy in that scenario.
+ */
 export function getClientIp(headers: Headers): string {
+  const cf = headers.get('cf-connecting-ip');
+  if (cf) return cf.trim();
   const forwarded = headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0].trim();
   const real = headers.get('x-real-ip');

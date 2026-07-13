@@ -1,9 +1,17 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import type { CSSProperties } from 'react';
 import type { Game, Platform } from '@/types';
 import { statusLabel, statusColor, engineLabel, platformIcon, formatNumber } from '@/lib/utils';
 
-interface Props { game: Game; rank?: number; className?: string; style?: React.CSSProperties; }
+interface Props {
+  game: Game;
+  rank?: number;
+  /** Forwarded to the root <article> — e.g. 'stagger-child' for grid reveal. */
+  className?: string;
+  /** Forwarded to the root <article> — e.g. { '--stagger-index': i } for stagger-child. */
+  style?: CSSProperties;
+}
 
 export default function GameCard({ game, rank, className, style }: Props) {
   // Derive unique platforms from typed downloads — avoids `as any` cast.

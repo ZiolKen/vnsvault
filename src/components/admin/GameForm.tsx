@@ -28,7 +28,7 @@ const blank = {
 
 export default function GameForm({ initial, gameId }: Props) {
   const router = useRouter();
-  const { push: toast } = useToast();
+  const toast = useToast();
   const [form, setForm] = useState({ ...blank, ...initial });
   const [genres, setGenres] = useState<number[]>(initial?.genres?.map(g => g.id) ?? []);
   const [allGenres, setAllGenres] = useState<{ id: number; name: string; slug: string }[]>([]);
@@ -77,26 +77,20 @@ export default function GameForm({ initial, gameId }: Props) {
       });
       const d = await r.json();
       if (d.success) {
-        // Fired before router.push() so the toast survives the navigation
-        // away from this form — it renders from the root-level
-        // <ToastProvider> in layout.tsx, not from this component.
-        toast(isEdit ? 'Đã lưu thay đổi.' : 'Đã đăng game mới.', 'success');
+        // This is the longest form in the app and the save always
+        // navigates away immediately (router.push below) — without a
+        // toast there's no visible confirmation the save landed before
+        // the admin games list replaces this whole form.
+        toast.push(isEdit ? `Đã lưu thay đổi cho "${form.title}"` : `Đã đăng game "${form.title}"`, 'success');
         router.push('/admin/games');
         router.refresh();
       } else {
         setError(d.error ?? 'Lỗi lưu game');
-        toast(d.error ?? 'Lỗi lưu game', 'error');
+        toast.push(d.error ?? 'Lỗi lưu game', 'error');
       }
-    } catch {
-      const msg = 'Không thể kết nối máy chủ. Vui lòng thử lại.';
-      setError(msg);
-      toast(msg, 'error');
     } finally { setSaving(false); }
   };
 
-  // Selects/textareas aren't covered by <FormField> (it wraps a single
-  // <input>), so they keep this local class to stay visually identical to
-  // the FormField-rendered inputs around them.
   const inputCls = "w-full bg-vault border border-border rounded-lg px-3 py-2.5 text-sm text-ghost placeholder:text-muted focus:outline-none focus:border-copper/60 transition-colors";
   const labelCls = "text-xs uppercase tracking-wider text-muted font-semibold mb-1.5 block";
 
@@ -122,7 +116,7 @@ export default function GameForm({ initial, gameId }: Props) {
       </div>
 
       {error && (
-        <div role="alert" className="slide-up mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400">{error}</div>
+        <div className="slide-up mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400">{error}</div>
       )}
 
       <div className="space-y-6">
@@ -131,20 +125,11 @@ export default function GameForm({ initial, gameId }: Props) {
           <h2 className="font-heading text-sm font-bold text-ghost mb-4">Thông Tin Cơ Bản</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <FormField
-                label="Tên Game *"
-                value={form.title}
-                onChange={e => set('title', e.target.value)}
-                placeholder="Tên tựa game"
-                required
-              />
+              <FormField label="Tên Game" value={form.title} onChange={e => set('title', e.target.value)}
+                placeholder="Tên tựa game" required />
             </div>
-            <FormField
-              label="Developer / Hãng phát hành"
-              value={form.developer}
-              onChange={e => set('developer', e.target.value)}
-              placeholder="Tên studio / developer"
-            />
+            <FormField label="Developer / Hãng phát hành" value={form.developer} onChange={e => set('developer', e.target.value)}
+              placeholder="Tên studio / developer" />
             <div>
               <label className={labelCls}>Game Engine</label>
               <select value={form.engine} onChange={e => set('engine', e.target.value)} className={inputCls}>
@@ -193,12 +178,8 @@ export default function GameForm({ initial, gameId }: Props) {
           <h2 className="font-heading text-sm font-bold text-ghost mb-4">Hình Ảnh</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <FormField
-                label="URL Ảnh Bìa (Cover)"
-                value={form.cover_url}
-                onChange={e => set('cover_url', e.target.value)}
-                placeholder="https://..."
-              />
+              <FormField label="URL Ảnh Bìa (Cover)" value={form.cover_url} onChange={e => set('cover_url', e.target.value)}
+                placeholder="https://..." />
               {form.cover_url && (
                 <div className="relative mt-2 h-32 rounded-lg border border-border overflow-hidden">
                   {/* unoptimized: admin can paste any external host, so we
@@ -210,12 +191,8 @@ export default function GameForm({ initial, gameId }: Props) {
               )}
             </div>
             <div>
-              <FormField
-                label="URL Banner (Tùy chọn)"
-                value={form.banner_url}
-                onChange={e => set('banner_url', e.target.value)}
-                placeholder="https://..."
-              />
+              <FormField label="URL Banner (Tùy chọn)" value={form.banner_url} onChange={e => set('banner_url', e.target.value)}
+                placeholder="https://..." />
               {form.banner_url && (
                 <div className="relative mt-2 h-32 rounded-lg border border-border overflow-hidden">
                   <Image src={form.banner_url} alt="preview" fill unoptimized className="object-cover" />
@@ -256,58 +233,47 @@ export default function GameForm({ initial, gameId }: Props) {
         <section className="bg-surface border border-border rounded-xl p-5">
           <div className="flex items-center justify-between mb-1">
             <h2 className="font-heading text-sm font-bold text-ghost">Link Tải</h2>
-            <Button type="button" variant="ghost" onClick={addDownload} className="text-xs px-3 py-1.5">
+            <button type="button" onClick={addDownload}
+              className="press-scale text-xs px-3 py-1.5 bg-copper/10 border border-copper/30 text-copper-light rounded-lg hover:bg-copper/20 transition-colors">
               + Thêm Link
-            </Button>
+            </button>
           </div>
           <p className="text-xs text-ghost-dim mb-4 leading-relaxed">
             <strong className="text-ghost">Phiên bản</strong> sẽ hiển thị ở mục Thông Tin Game (không hiện trên từng link).{' '}
             <strong className="text-ghost">Nhãn</strong> là tên nơi lưu trữ file mà người tải nhìn thấy — VD: Google Drive, Pixeldrain, Mediafire.
           </p>
+          <div className="grid grid-cols-12 gap-2 mb-1.5 px-0.5 hidden sm:grid">
+            <p className="col-span-2 text-[10px] uppercase tracking-wider text-muted font-semibold">Phiên bản</p>
+            <p className="col-span-2 text-[10px] uppercase tracking-wider text-muted font-semibold">Nền tảng</p>
+            <p className="col-span-3 text-[10px] uppercase tracking-wider text-muted font-semibold">Nhãn (host)</p>
+            <p className="col-span-4 text-[10px] uppercase tracking-wider text-muted font-semibold">URL</p>
+          </div>
           <div className="space-y-3">
             {downloads.map((dl, i) => (
               <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start">
                 <div className="sm:col-span-2">
-                  <FormField
-                    label="Phiên bản"
-                    value={dl.version}
-                    onChange={e => updateDownload(i, 'version', e.target.value)}
-                    placeholder="v1.0"
-                  />
+                  <input value={dl.version} onChange={e => updateDownload(i, 'version', e.target.value)}
+                    placeholder="v1.0" className={inputCls} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs text-muted mb-1.5 block uppercase tracking-wider">Nền tảng</label>
                   <select value={dl.platform} onChange={e => updateDownload(i, 'platform', e.target.value)}
                     className={inputCls}>
                     {PLATFORMS.map(p => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
                   </select>
                 </div>
                 <div className="sm:col-span-3">
-                  <FormField
-                    label="Nhãn"
-                    value={dl.label}
-                    onChange={e => updateDownload(i, 'label', e.target.value)}
-                    placeholder="VD: Google Drive, Pixeldrain"
-                  />
+                  <input value={dl.label} onChange={e => updateDownload(i, 'label', e.target.value)}
+                    placeholder="VD: Google Drive, Pixeldrain" className={inputCls} />
                 </div>
                 <div className="sm:col-span-4">
-                  <FormField
-                    label="URL"
-                    value={dl.url}
-                    onChange={e => updateDownload(i, 'url', e.target.value)}
-                    placeholder="https://..."
-                  />
+                  <input value={dl.url} onChange={e => updateDownload(i, 'url', e.target.value)}
+                    placeholder="https://..." className={inputCls} />
                 </div>
-                <div className="sm:col-span-1 flex sm:justify-end sm:pt-6">
-                  <Button
-                    type="button"
-                    variant="danger"
-                    onClick={() => removeDownload(i)}
-                    aria-label={`Xóa link tải ${i + 1}`}
-                    className="!p-2.5"
-                  >
+                <div className="sm:col-span-1 flex justify-end">
+                  <button type="button" onClick={() => removeDownload(i)}
+                    className="press-scale p-2.5 border border-red-500/30 text-red-400/70 rounded-lg hover:text-red-400 hover:border-red-500/60 transition-colors">
                     ✕
-                  </Button>
+                  </button>
                 </div>
               </div>
             ))}

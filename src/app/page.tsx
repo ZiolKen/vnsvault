@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Metadata } from 'next';
+import type { CSSProperties } from 'react';
 import GameCard from '@/components/games/GameCard';
 import { formatNumber } from '@/lib/utils';
 
@@ -169,7 +170,7 @@ export default async function HomePage() {
                   game={g}
                   rank={i + 1}
                   className="stagger-child"
-                  style={{ '--stagger-index': i } as React.CSSProperties}
+                  style={{ '--stagger-index': i } as CSSProperties}
                 />
               ))}
             </div>
@@ -197,7 +198,7 @@ export default async function HomePage() {
                   key={g.id}
                   game={g}
                   className="stagger-child"
-                  style={{ '--stagger-index': i } as React.CSSProperties}
+                  style={{ '--stagger-index': i } as CSSProperties}
                 />
               ))}
             </div>

@@ -1,4 +1,5 @@
 import { Pool, PoolClient } from 'pg';
+import { getRedis, SHARD_WRITE_TARGET_KEY } from '@/lib/redis';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Capacity-based sharding — NOT primary/replica.
@@ -7,10 +8,19 @@ import { Pool, PoolClient } from 'pg';
 // instances). There is no "primary": every shard is a peer that can hold
 // any row.
 //
-//   • WRITES (new rows): go to the first shard that still has room
-//     (checked via `pg_database_size`). Once a shard crosses
-//     MAX_SHARD_BYTES, new rows start landing on the next shard. Existing
-//     rows are never moved between shards.
+//   • WRITES (new rows): go to the first shard that still has room. Once a
+//     shard crosses MAX_SHARD_BYTES, new rows start landing on the next
+//     shard. Existing rows are never moved between shards. The actual
+//     `pg_database_size()` check no longer runs on the request path — an
+//     external scheduler (cron-job.org, every 5 min — see README's
+//     Write-Shard Pointer section for why it's external instead of
+//     Vercel's own `crons`) hits `/api/internal/shard-check`,
+//     checks every shard's size ONCE, and writes the chosen shard index to
+//     Redis (`shard:write-target`). `pickWriteShardIndex()` below just does
+//     a single Redis GET (a few ms) instead of sweeping every shard on
+//     every cold cache. The in-memory cache/singleflight this file already
+//     had is kept as a second line of defense if Redis is slow/unset/
+//     erroring — see `resolveWriteShardIndex()`.
 //   • READS / UPDATES / DELETES on existing rows: since we don't track
 //     which shard holds which row, every shard is queried in parallel and
 //     the results are merged in application code (`fanOut`). For
@@ -90,16 +100,17 @@ class ShardedDb {
   private cachedWriteIndex: number | null = null;
   private cachedWriteIndexExpiresAt = 0;
 
-  // Singleflight lock: while a size-check sweep is already in flight for
-  // this container, concurrent callers await that SAME promise instead of
-  // each starting their own loop over `pickWriteShardIndex`. Without this,
-  // N requests arriving in the same container within the same tick (before
-  // any of them has populated the cache) would each independently call
-  // pg_database_size() on shard 0, shard 1, etc. — the in-container half of
-  // the stampede described in the Vercel review. This does not fix the
-  // cross-container half (each container still has its own cache/lock) —
-  // that needs a shared store (Redis / Vercel KV) fed by a cron job, see
-  // README follow-up.
+  // Singleflight lock: while a resolve is already in flight for this
+  // container, concurrent callers await that SAME promise instead of each
+  // starting their own `resolveWriteShardIndex()`. Without this, N requests
+  // arriving in the same container within the same tick (before any of
+  // them has populated the cache) would each independently hit Redis (or,
+  // if Redis is down, each independently sweep pg_database_size()) — the
+  // in-container half of the stampede described in the Vercel review. The
+  // cross-container half is now handled by Redis itself (see
+  // `resolveWriteShardIndex` / SHARD_WRITE_TARGET_KEY below): every
+  // container reads the same pointer instead of each running its own
+  // sweep, so there's no cross-container stampede left to fix.
   private pickWriteShardIndexInFlight: Promise<number> | null = null;
 
   // withRowTransaction builds its probe SQL with template-literal table/
@@ -212,10 +223,9 @@ class ShardedDb {
   }
 
   /**
-   * Pick the shard that new rows should be written to: the first one (in
-   * SHARD_0, SHARD_1, … order) that's still under the size ceiling. Result
-   * is cached briefly so normal write traffic doesn't pay a size-check
-   * round trip every time.
+   * Pick the shard that new rows should be written to. Result is cached
+   * briefly so normal write traffic doesn't pay a resolve round trip every
+   * time — see `resolveWriteShardIndex()` for what happens on a cache miss.
    */
   private async pickWriteShardIndex(): Promise<number> {
     this.init();
@@ -226,36 +236,77 @@ class ShardedDb {
       return this.cachedWriteIndex;
     }
 
-    // Cache is cold/stale. If a sweep is already running (kicked off by an
-    // earlier concurrent call in this same container), piggyback on it
-    // instead of starting a second, third, fourth... simultaneous sweep.
+    // Cache is cold/stale. If a resolve is already running (kicked off by
+    // an earlier concurrent call in this same container), piggyback on it
+    // instead of starting a second, third, fourth... simultaneous one.
     if (this.pickWriteShardIndexInFlight) {
       return this.pickWriteShardIndexInFlight;
     }
 
-    const sweep = this.sweepForWritableShard();
-    this.pickWriteShardIndexInFlight = sweep;
+    const resolve = this.resolveWriteShardIndex();
+    this.pickWriteShardIndexInFlight = resolve;
     try {
-      return await sweep;
+      return await resolve;
     } finally {
-      // Only clear if we're still the sweep that set it — a fresh sweep
-      // started via pickWriteShardIndexFresh() while this one was pending
-      // would otherwise get its in-flight marker wiped out from under it.
-      if (this.pickWriteShardIndexInFlight === sweep) {
+      // Only clear if we're still the resolve that set it — a fresh
+      // resolve started via pickWriteShardIndexFresh() while this one was
+      // pending would otherwise get its in-flight marker wiped out from
+      // under it.
+      if (this.pickWriteShardIndexInFlight === resolve) {
         this.pickWriteShardIndexInFlight = null;
       }
     }
   }
 
-  /** The actual "walk the shards and find one with room" sweep, run at most once at a time per container. */
+  /**
+   * Resolve a cold/expired write-shard cache. Tries the Redis pointer
+   * maintained by the `/api/internal/shard-check` cron job first — one
+   * GET, a few ms, no `pg_database_size()` call anywhere on this request's
+   * critical path. Falls back to the original direct sweep when Redis
+   * isn't configured, errors, or holds a stale/out-of-range value (e.g.
+   * SHARD_N count changed since the cron last ran) — that fallback is what
+   * ran unconditionally before Redis existed, so a Redis outage degrades
+   * to "slightly slower, more DB load" rather than "writes stop working".
+   */
+  private async resolveWriteShardIndex(): Promise<number> {
+    const redis = getRedis();
+    if (redis) {
+      try {
+        const raw = await redis.get<number | string>(SHARD_WRITE_TARGET_KEY);
+        if (raw !== null && raw !== undefined) {
+          const idx = typeof raw === 'number' ? raw : parseInt(String(raw), 10);
+          if (!isNaN(idx) && idx >= 0 && idx < this.shards.length) {
+            this.cacheWriteIndex(idx);
+            return idx;
+          }
+          console.warn(`[ShardedDb] Redis ${SHARD_WRITE_TARGET_KEY}="${raw}" is invalid/out of range for ${this.shards.length} shard(s) — falling back to direct sweep.`);
+        }
+      } catch (e) {
+        console.error(`[ShardedDb] Redis GET ${SHARD_WRITE_TARGET_KEY} failed — falling back to direct pg_database_size sweep:`, e);
+      }
+    }
+    return this.sweepForWritableShard();
+  }
+
+  /** Cache a resolved write-shard index with the usual jittered TTL. */
+  private cacheWriteIndex(index: number): void {
+    this.cachedWriteIndex = index;
+    this.cachedWriteIndexExpiresAt =
+      Date.now() + WRITE_SHARD_CACHE_MS + Math.floor(Math.random() * WRITE_SHARD_CACHE_JITTER_MS);
+  }
+
+  /**
+   * The actual "walk the shards and find one with room" sweep, run at most
+   * once at a time per container. Used directly by the shard-check cron
+   * route (see `sweepWriteShardIndexForCron`), and as this file's own
+   * fallback when Redis is unavailable.
+   */
   private async sweepForWritableShard(): Promise<number> {
     for (const shard of this.shards) {
       try {
         const size = await this.shardSize(shard.pool);
         if (size < this.maxShardBytes) {
-          this.cachedWriteIndex = shard.index;
-          this.cachedWriteIndexExpiresAt =
-            Date.now() + WRITE_SHARD_CACHE_MS + Math.floor(Math.random() * WRITE_SHARD_CACHE_JITTER_MS);
+          this.cacheWriteIndex(shard.index);
           return shard.index;
         }
       } catch (e) {
@@ -273,6 +324,20 @@ class ShardedDb {
       `No writable shard available — all ${this.shards.length} are at/above the ` +
       `${this.maxShardBytes} byte ceiling or unreachable.`
     );
+  }
+
+  /**
+   * Public entry point for the `/api/internal/shard-check` cron route: runs
+   * the direct `pg_database_size()` sweep across every shard and returns
+   * the chosen index, so the route can write it to Redis. This is the ONE
+   * remaining place in the app that calls `pg_database_size()` — everyone
+   * else (via `pickWriteShardIndex()`) reads the Redis pointer this
+   * populates instead.
+   */
+  async sweepWriteShardIndexForCron(): Promise<number> {
+    this.init();
+    if (this.shards.length === 0) throw new Error('No shards available');
+    return this.sweepForWritableShard();
   }
 
   /**

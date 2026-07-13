@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { TurnstileWidget } from '@/components/ui/TurnstileWidget';
 import FormField from '@/components/ui/FormField';
 import Button from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ username: '', email: '', password: '' });
@@ -14,6 +15,7 @@ export default function RegisterPage() {
   const [showPw, setShowPw] = useState(false);
   const [tsToken, setTsToken] = useState('');
   const router = useRouter();
+  const toast = useToast();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +29,15 @@ export default function RegisterPage() {
         body: JSON.stringify({ ...form, tsToken }),
       });
       const d = await r.json();
-      if (d.success) { router.push('/'); router.refresh(); }
+      if (d.success) {
+        // Toast confirmation matters here specifically because the very
+        // next line navigates away — without it there'd be no visible
+        // sign the registration actually succeeded before the homepage
+        // replaces this whole form.
+        toast.push(`Chào mừng ${form.username}! Tài khoản đã được tạo.`, 'success');
+        router.push('/');
+        router.refresh();
+      }
       else setError(d.error ?? 'Đăng ký thất bại');
     } finally { setLoading(false); }
   };
@@ -98,7 +108,7 @@ export default function RegisterPage() {
                 autoComplete="new-password"
                 required
                 minLength={6}
-                aria-describedby="pw-strength"
+                aria-describedby={form.password ? 'pw-strength' : undefined}
                 trailing={
                   <button
                     type="button"

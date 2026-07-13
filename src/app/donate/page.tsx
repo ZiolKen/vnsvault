@@ -59,7 +59,7 @@ export default function DonatePage() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-10 p-4 sm:p-5 bg-copper/10 border border-copper/30 rounded-2xl">
             <span className="text-2xl shrink-0" aria-hidden="true">👑</span>
             <p className="text-sm text-ghost-dim flex-1">
-              <span className="text-copper-light font-semibold">Đã mở gói VIP!</span>{' '}
+              <span className="text-copper-light font-semibold">Đã có gói VIP!</span>{' '}
               Đăng ký để tải game <strong className="text-ghost">trực tiếp, không cần vượt link quảng cáo</strong> — xem bảng giá bên dưới.
             </p>
             <a href="#vip-pricing" className="btn-copper text-sm shrink-0 justify-center">Xem gói VIP ↓</a>

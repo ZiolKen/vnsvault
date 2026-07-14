@@ -157,7 +157,10 @@ gtag('config', '${GA_ID}');`}
         <Navbar />
         <VipAnnouncementBar />
         <ToastProvider>
-          <div className="flex-1 flex flex-col">{children}</div>
+          {/* pt reserves exactly the banner's live height (0px when hidden/dismissed),
+              published as --vip-banner-h by VipAnnouncementBar, so its fixed strip
+              never overlaps the top of any page's content. */}
+          <div className="flex-1 flex flex-col pt-[var(--vip-banner-h)]">{children}</div>
         </ToastProvider>
         <Footer />
         <Analytics />

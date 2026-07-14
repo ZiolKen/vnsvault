@@ -29,13 +29,13 @@ const FILTER_TABS: { value: VipFilter; label: string }[] = [
 
 function VipBadge({ vip }: { vip: VipStatus }) {
   if (!vip.isVip) {
-    return <span className="text-xs px-2 py-0.5 rounded-full border bg-surface border-border text-ghost-dim">Không VIP</span>;
+    return <span className="text-xs px-2 py-0.5 rounded-full border bg-surface border-border text-ghost-dim whitespace-nowrap">Không VIP</span>;
   }
   if (vip.permanent) {
-    return <span className="text-xs px-2 py-0.5 rounded-full border bg-copper/20 text-copper-light border-copper/40 font-medium">👑 VIP vĩnh viễn</span>;
+    return <span className="text-xs px-2 py-0.5 rounded-full border bg-copper/20 text-copper-light border-copper/40 font-medium whitespace-nowrap">👑 VIP vĩnh viễn</span>;
   }
   return (
-    <span className="text-xs px-2 py-0.5 rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-medium">
+    <span className="text-xs px-2 py-0.5 rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-medium whitespace-nowrap">
       👑 VIP đến {vip.expiresAt ? formatDate(vip.expiresAt) : '—'}
     </span>
   );

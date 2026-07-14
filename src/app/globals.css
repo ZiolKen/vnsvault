@@ -15,6 +15,11 @@
   --dim:          #3a3a55;
   --ghost:        #e0e0f0;
   --ghost-dim:    #9090b0;
+
+  /* Live height of the fixed VipAnnouncementBar (0px when hidden/dismissed).
+     Set from VipAnnouncementBar.tsx so page content can reserve exactly
+     enough top padding to never sit underneath it. */
+  --vip-banner-h: 0px;
 }
 
 /* ── Base ─────────────────────────────────────────────────── */
@@ -331,8 +336,14 @@ html { overflow-y: scroll; }
 .divider { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
 
 /* ── Touch target minimum (mobile a11y) ───────────────────── */
+/* Scoped to buttons/role=button and nav links only — real tap targets
+   (icon buttons, nav items) already size themselves explicitly where
+   needed (see Navbar's `min-h-[44px] min-w-[44px]`). A blanket `a`
+   selector here forces even small inline links — genre tag pills,
+   breadcrumbs, "Đăng ký ngay →" style text links — to balloon to
+   44x44px, turning tight little pills into oversized blobs. */
 @media (pointer: coarse) {
-  button, [role="button"], a { min-height: 44px; min-width: 44px; }
+  button, [role="button"] { min-height: 44px; min-width: 44px; }
   nav a { min-height: 48px; }
 }
 

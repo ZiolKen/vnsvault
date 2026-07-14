@@ -91,7 +91,7 @@ export default function AdminLayoutClient({
   return (
     <div className="min-h-screen flex bg-obsidian">
       {/* Desktop sidebar (md+) */}
-      <aside className="hidden md:flex md:flex-col w-56 shrink-0 bg-vault border-r border-border">
+      <aside className="hidden md:flex md:flex-col w-56 shrink-0 bg-vault border-r border-border pt-16">
         <SidebarContent username={username} />
       </aside>
 
@@ -103,7 +103,7 @@ export default function AdminLayoutClient({
 
       {/* Mobile: slide-in drawer */}
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 w-64 bg-vault border-r border-border flex flex-col
+        className={`fixed top-16 left-0 bottom-0 z-50 w-64 bg-vault border-r border-border flex flex-col
           transition-transform duration-300 ease-out md:hidden
           ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}`}
         aria-label="Admin sidebar"
@@ -114,9 +114,9 @@ export default function AdminLayoutClient({
       </aside>
 
       {/* Content */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col pt-16">
         {/* Mobile top bar */}
-        <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 h-14
+        <header className="md:hidden sticky top-16 z-30 flex items-center gap-3 px-4 h-14
           bg-vault border-b border-border shrink-0">
           <button onClick={() => setDrawerOpen(true)} aria-label="Mở menu admin"
             aria-expanded={drawerOpen}

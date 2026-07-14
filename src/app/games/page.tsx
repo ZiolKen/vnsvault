@@ -88,7 +88,7 @@ function TagFilter({ allGenres, selected, onToggle }: {
               <button
                 key={slug}
                 onClick={() => onToggle(slug)}
-                className="flex items-center gap-1 px-2.5 py-1 text-xs bg-copper/15 text-copper-light border border-copper/30 rounded-full hover:bg-copper/25 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs bg-copper/15 text-copper-light border border-copper/30 rounded-full hover:bg-copper/25 transition-colors whitespace-nowrap"
               >
                 {g?.name ?? slug}
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -105,7 +105,7 @@ function TagFilter({ allGenres, selected, onToggle }: {
             <button
               key={g.id}
               onClick={() => onToggle(g.slug)}
-              className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+              className={`px-2.5 py-1 text-xs rounded-full border whitespace-nowrap transition-colors ${
                 selected.includes(g.slug)
                   ? 'bg-copper/15 text-copper-light border-copper/30'
                   : 'bg-vault text-ghost-dim border-border hover:border-copper/30'
@@ -302,21 +302,21 @@ function GamesContent() {
             <div className="flex flex-wrap gap-2 mb-5" role="group" aria-label="Bộ lọc đang áp dụng">
               {status && (
                 <button onClick={() => pushParam('status', '')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-copper/15 text-copper-light border border-copper/30 rounded-full hover:bg-copper/25 transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-copper/15 text-copper-light border border-copper/30 rounded-full hover:bg-copper/25 transition-colors whitespace-nowrap">
                   {STATUS_OPTIONS.find(o => o.value === status)?.label}
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               )}
               {engine && (
                 <button onClick={() => pushParam('engine', '')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-copper/15 text-copper-light border border-copper/30 rounded-full hover:bg-copper/25 transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-copper/15 text-copper-light border border-copper/30 rounded-full hover:bg-copper/25 transition-colors whitespace-nowrap">
                   {ENGINE_OPTIONS.find(o => o.value === engine)?.label}
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               )}
               {tags.map(slug => (
                 <button key={slug} onClick={() => toggleTag(slug)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-copper/15 text-copper-light border border-copper/30 rounded-full hover:bg-copper/25 transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-copper/15 text-copper-light border border-copper/30 rounded-full hover:bg-copper/25 transition-colors whitespace-nowrap">
                   #{allGenres.find(g => g.slug === slug)?.name ?? slug}
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>

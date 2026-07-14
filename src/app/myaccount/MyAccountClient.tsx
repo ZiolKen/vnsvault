@@ -287,11 +287,11 @@ export default function MyAccountClient({ user, vip }: { user: UserInfo; vip: Vi
                 {user.role === 'admin' ? '⚙ Admin' : '👤 Thành viên'}
               </span>
               {vip.isVip ? (
-                <span className="text-xs px-2 py-0.5 rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-medium">
-                  👑 {vip.permanent ? 'VIP vĩnh viễn' : `VIP — hết hạn ${vip.expiresAt ? new Date(vip.expiresAt).toLocaleDateString('vi-VN') : ''}`}
+                <span className="text-xs px-2 py-0.5 rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-medium whitespace-nowrap">
+                  👑 {vip.permanent ? 'VIP vĩnh viễn' : `VIP — hết hạn ${vip.expiresAt ? new Date(vip.expiresAt).toLocaleDateString('vi-VN') : 'không xác định'}`}
                 </span>
               ) : (
-                <Link href="/donate" className="text-xs px-2 py-0.5 rounded-full border bg-copper/10 text-copper-light border-copper/30 font-medium hover:bg-copper/20 transition-colors">
+                <Link href="/donate" className="text-xs px-2 py-0.5 rounded-full border bg-copper/10 text-copper-light border-copper/30 font-medium hover:bg-copper/20 transition-colors whitespace-nowrap">
                   ✦ Đăng ký VIP — tải không cần vượt link
                 </Link>
               )}

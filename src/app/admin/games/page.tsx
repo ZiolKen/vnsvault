@@ -76,8 +76,8 @@ export default function AdminGamesPage() {
           </Link>
         </div>
       ) : (
-        <div className="bg-surface border border-border rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-surface border border-border rounded-xl overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border/80 text-left">
                 <th className="px-4 py-3 text-xs uppercase tracking-wider text-muted font-semibold">Game</th>
@@ -94,7 +94,7 @@ export default function AdminGamesPage() {
                   <td className="px-4 py-3">
                     <div>
                       <p className="font-medium text-ghost line-clamp-1">{g.title}</p>
-                      <p className="text-xs text-muted mt-0.5">/{g.slug}</p>
+                      <p className="text-xs text-muted mt-0.5 truncate max-w-[220px]">/{g.slug}</p>
                     </div>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
@@ -118,7 +118,7 @@ export default function AdminGamesPage() {
                       }`} />
                     </button>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
                       <Link href={`/games/${g.slug}`} target="_blank"
                         className="text-xs px-2.5 py-1.5 border border-border rounded-lg text-ghost-dim hover:text-ghost hover:border-copper/40 transition-colors">

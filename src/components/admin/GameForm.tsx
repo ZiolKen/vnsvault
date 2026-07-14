@@ -217,7 +217,7 @@ export default function GameForm({ initial, gameId }: Props) {
             <div className="flex flex-wrap gap-2">
               {allGenres.map(g => (
                 <button key={g.id} type="button" onClick={() => toggleGenre(g.id)}
-                  className={`press-scale px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                  className={`press-scale px-3 py-1.5 rounded-full text-xs border whitespace-nowrap transition-colors ${
                     genres.includes(g.id)
                       ? 'bg-copper/20 text-copper-light border-copper/50'
                       : 'bg-vault text-ghost-dim border-border hover:border-copper/30'

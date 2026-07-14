@@ -266,7 +266,7 @@ export default async function GameDetailPage({ params }: Props) {
                   <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-3">THỂ LOẠI TRÒ CHƠI</p>
                   <div className="flex flex-wrap gap-2" role="list" aria-label="Thể loại">
                     {game.genres.map(g => (
-                      <Link key={g.id} href={`/games?genre=${g.slug}`} role="listitem" className="px-3 py-1 text-xs bg-vault border border-border rounded-full text-ghost-dim hover:border-copper/40 hover:text-copper-light transition-colors">{g.name}</Link>
+                      <Link key={g.id} href={`/games?genre=${g.slug}`} role="listitem" className="px-3 py-1 text-xs bg-vault border border-border rounded-full text-ghost-dim hover:border-copper/40 hover:text-copper-light transition-colors whitespace-nowrap">{g.name}</Link>
                     ))}
                   </div>
                 </div>

@@ -15,7 +15,7 @@ Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Aiven
 - **Tài khoản người dùng** — đăng ký / đăng nhập, đổi mật khẩu, bookmark game, chọn avatar
 - **VIP** — tài khoản VIP (vĩnh viễn hoặc theo tháng, nâng cấp thủ công qua admin panel) tải game trực tiếp, bỏ qua bước "vượt link" quảng cáo (bbmkts.com) mà tài khoản thường phải đi qua
 - **Admin panel** — quản lý game (thêm / sửa / xoá / publish / featured), duyệt đề xuất, xử lý báo cáo link, quản lý VIP (nâng cấp / gia hạn / thu hồi), soạn **thông báo popup** hiển thị cho khách truy cập
-- **Thông báo popup** — popup thông báo toàn site (giống bảng "Thông báo" của các trang đổi thẻ), nội dung/tiêu đề/thời gian "Đóng N giờ" chỉnh sửa đầy đủ từ Admin Dashboard (`/admin/announcement`), lưu server-side; lượt đóng của khách được nhớ ở **IndexedDB** phía client theo từng phiên bản nội dung — sửa nội dung sẽ tự hiện lại popup cho người đã từng đóng
+- **Thông báo popup** — popup thông báo toàn site, nội dung/tiêu đề/thời gian "Đóng N giờ" chỉnh sửa đầy đủ từ Admin Dashboard (`/admin/announcement`), lưu server-side; lượt đóng của khách được nhớ ở **IndexedDB** phía client theo từng phiên bản nội dung — sửa nội dung sẽ tự hiện lại popup cho người đã từng đóng
 - **ISR** — homepage cache 5 phút, sitemap cache 1 giờ
 - **SEO** — metadata, canonical URL, sitemap.xml, robots.txt tự động
 - **PWA** — web app manifest
@@ -124,7 +124,7 @@ tự tắt sau 60 ngày repo không có commit — im lặng, dễ bỏ sót.
 ### 1. Clone & cài dependencies
 
 ```bash
-git clone https://github.com/yourname/vnsvault.git
+git clone https://github.com/ZiolKen/vnsvault.git
 cd vnsvault
 npm install
 ```

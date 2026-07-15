@@ -14,7 +14,8 @@ Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Aiven
 - **Báo cáo link hỏng** — report broken / sai download link trực tiếp từ trang game
 - **Tài khoản người dùng** — đăng ký / đăng nhập, đổi mật khẩu, bookmark game, chọn avatar
 - **VIP** — tài khoản VIP (vĩnh viễn hoặc theo tháng, nâng cấp thủ công qua admin panel) tải game trực tiếp, bỏ qua bước "vượt link" quảng cáo (bbmkts.com) mà tài khoản thường phải đi qua
-- **Admin panel** — quản lý game (thêm / sửa / xoá / publish / featured), duyệt đề xuất, xử lý báo cáo link, quản lý VIP (nâng cấp / gia hạn / thu hồi)
+- **Admin panel** — quản lý game (thêm / sửa / xoá / publish / featured), duyệt đề xuất, xử lý báo cáo link, quản lý VIP (nâng cấp / gia hạn / thu hồi), soạn **thông báo popup** hiển thị cho khách truy cập
+- **Thông báo popup** — popup thông báo toàn site (giống bảng "Thông báo" của các trang đổi thẻ), nội dung/tiêu đề/thời gian "Đóng N giờ" chỉnh sửa đầy đủ từ Admin Dashboard (`/admin/announcement`), lưu server-side; lượt đóng của khách được nhớ ở **IndexedDB** phía client theo từng phiên bản nội dung — sửa nội dung sẽ tự hiện lại popup cho người đã từng đóng
 - **ISR** — homepage cache 5 phút, sitemap cache 1 giờ
 - **SEO** — metadata, canonical URL, sitemap.xml, robots.txt tự động
 - **PWA** — web app manifest
@@ -251,20 +252,24 @@ src/
 │   └── api/                  # Route handlers
 │       ├── auth/             # login, logout, register, me
 │       ├── games/            # public game API
-│       ├── admin/            # admin-only API (games, reports, requests)
+│       ├── admin/            # admin-only API (games, reports, requests, announcement)
+│       ├── announcement/     # public GET — announcement popup content
 │       ├── account/          # avatar, password, bookmarks
 │       ├── requests/         # vote
 │       ├── internal/         # shard-check (cron-only, see Write-Shard Pointer)
 │       └── health/           # health check
 ├── components/
 │   ├── games/                # GameCard, BookmarkButton, DownloadButton, ...
-│   ├── admin/                # GameForm
+│   ├── admin/                # GameForm, AnnouncementForm
+│   ├── announcement/         # AnnouncementBody — shared renderer (popup + admin preview)
 │   ├── ui/                   # FormField, Button, Toast, Modal
-│   └── layout/               # Navbar, Footer
+│   └── layout/               # Navbar, Footer, AnnouncementModal
 ├── lib/
 │   ├── db/
 │   │   ├── index.ts          # ShardedDb class
 │   │   └── schema.sql        # Database schema
+│   ├── announcement.ts       # getAnnouncement / updateAnnouncement (broadcast fanOut helpers)
+│   ├── announcementStore.ts  # Client IndexedDB dismissal storage for the popup
 │   ├── redis.ts              # Upstash Redis client + write-shard pointer key/TTL
 │   ├── queries.ts            # Server-side query helpers
 │   ├── auth.ts               # Auth barrel re-export

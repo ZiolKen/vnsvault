@@ -283,6 +283,48 @@ CREATE TABLE IF NOT EXISTS request_votes (
   PRIMARY KEY (request_id, user_id)
 );
 
+-- Site-wide announcement popup (global singleton — identical content on
+-- every shard, unlike every other table above which shards its rows).
+--
+-- `id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id)` is the standard Postgres
+-- "singleton row" trick: id can only ever be TRUE, and the PK constraint
+-- makes a second row impossible, so there is exactly one row to update —
+-- no "which row do I edit" ambiguity in the admin panel.
+--
+-- Because ShardedDb has no concept of a primary shard, this row is seeded
+-- on EVERY shard (below) and kept in sync by admin saves that fan out the
+-- same UPDATE to all shards at once (see PUT /api/admin/announcement) —
+-- an identical-broadcast write, the same idea as the static `genres` seed
+-- above, just admin-editable instead of fixed at deploy time. Reads
+-- (GET /api/announcement) fan out too and pick the highest `version`
+-- among the shards that answered, so a shard that missed one broadcast
+-- (e.g. it was briefly unreachable) doesn't serve stale content — it just
+-- self-heals on the next admin save.
+CREATE TABLE IF NOT EXISTS site_announcement (
+  id           BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id),
+  enabled      BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Bumped by +1 on every admin save. The client stores dismissals in
+  -- IndexedDB keyed by this number (see src/lib/announcementStore.ts), so
+  -- editing the announcement automatically re-shows it to everyone who
+  -- already snoozed an older version — no manual "force re-show" toggle
+  -- needed.
+  version      INTEGER NOT NULL DEFAULT 1,
+  title        VARCHAR(200) NOT NULL DEFAULT 'Thông báo',
+  -- Array of paragraphs; each paragraph is an array of inline segments
+  -- ({ text, bold?, tone?, href? }) so admin can mix bold/colored/linked
+  -- spans within one line (matching the reference design's mixed-color
+  -- warning text) without needing raw HTML. See AnnouncementSegment /
+  -- AnnouncementParagraph in src/types/index.ts — that's the single
+  -- source of truth for the shape stored here.
+  body         JSONB NOT NULL DEFAULT '[]'::jsonb,
+  snooze_hours INTEGER NOT NULL DEFAULT 12,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO site_announcement (id, enabled, version, title, body, snooze_hours)
+VALUES (TRUE, FALSE, 1, 'Thông báo', '[]'::jsonb, 12)
+ON CONFLICT (id) DO NOTHING;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_games_published     ON games(published, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_games_status        ON games(status);
@@ -315,4 +357,8 @@ CREATE TRIGGER games_updated_at BEFORE UPDATE ON games
 
 DROP TRIGGER IF EXISTS users_updated_at ON users;
 CREATE TRIGGER users_updated_at BEFORE UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS site_announcement_updated_at ON site_announcement;
+CREATE TRIGGER site_announcement_updated_at BEFORE UPDATE ON site_announcement
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();

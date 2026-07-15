@@ -106,6 +106,32 @@ export interface LinkReport {
   download_url?: string;
 }
 
+// ─── Site announcement popup ────────────────────────────────────────────
+// See schema.sql's `site_announcement` table for the storage side of this
+// shape — it's stored verbatim as the `body` JSONB column.
+export type AnnouncementTone = 'default' | 'muted' | 'copper' | 'gold' | 'danger';
+
+export interface AnnouncementSegment {
+  text: string;
+  bold?: boolean;
+  tone?: AnnouncementTone;
+  /** Optional http(s) link — segment renders as an underlined <a> instead of plain text. */
+  href?: string;
+}
+
+/** One line of the popup body; each paragraph is a list of inline segments so a single line can mix bold/colored/linked text. */
+export type AnnouncementParagraph = AnnouncementSegment[];
+
+export interface Announcement {
+  enabled: boolean;
+  version: number;
+  title: string;
+  body: AnnouncementParagraph[];
+  /** Hours the "Đóng N giờ" button snoozes the popup for, once dismissed that way. */
+  snoozeHours: number;
+  updatedAt: string;
+}
+
 export interface SessionPayload {
   userId: string;
   username: string;

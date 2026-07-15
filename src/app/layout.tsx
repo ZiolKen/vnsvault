@@ -5,6 +5,7 @@ import Script from 'next/script';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import VipAnnouncementBar from '@/components/layout/VipAnnouncementBar';
+import AnnouncementModal from '@/components/layout/AnnouncementModal';
 import { ToastProvider } from '@/components/ui/Toast';
 import { safeJsonLd } from '@/lib/utils';
 import './globals.css';
@@ -156,6 +157,7 @@ gtag('config', '${GA_ID}');`}
         </a>
         <Navbar />
         <VipAnnouncementBar />
+        <AnnouncementModal />
         <ToastProvider>
           {/* pt reserves exactly the banner's live height (0px when hidden/dismissed),
               published as --vip-banner-h by VipAnnouncementBar, so its fixed strip

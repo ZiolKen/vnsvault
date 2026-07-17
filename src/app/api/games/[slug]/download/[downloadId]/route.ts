@@ -109,10 +109,9 @@ function interstitialPage(destination: string, backHref: string): NextResponse {
        margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;
        justify-content:center;padding:24px;}
   .wrap{width:100%;max-width:900px;}
-  .banner{position:relative;width:100%;aspect-ratio:4100/493;overflow:hidden;
-          margin-bottom:28px;background:radial-gradient(ellipse at 50% 0%, rgba(184,115,51,0.18) 0%, var(--vault) 65%);
-          border:1px solid var(--border);}
-  .banner img{width:100%;height:100%;max-height:55px;object-fit:cover;display:block;}
+  .banner{position:relative;width:100%;aspect-ratio:4100/493;
+          margin-bottom:28px;}
+  .banner img{width:100%;height:100%;max-width:502px;max-height:55px;object-fit:cover;display:block;}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
         padding:40px 32px;text-align:center;}
   h1{font-family:Georgia,serif;font-weight:600;font-size:24px;margin:0 0 14px;color:var(--ghost);}

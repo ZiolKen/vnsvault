@@ -109,7 +109,7 @@ function interstitialPage(destination: string, backHref: string): NextResponse {
        margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;
        justify-content:center;padding:24px;}
   .wrap{width:100%;max-width:900px;}
-  .banner{position:relative;width:100%;aspect-ratio:4100/493;border-radius:14px;overflow:hidden;
+  .banner{position:relative;max-width:55px;width:100%;aspect-ratio:4100/493;border-radius:14px;overflow:hidden;
           margin-bottom:28px;background:radial-gradient(ellipse at 50% 0%, rgba(184,115,51,0.18) 0%, var(--vault) 65%);
           border:1px solid var(--border);}
   .banner img{width:100%;height:100%;object-fit:cover;display:block;}
@@ -142,12 +142,11 @@ function interstitialPage(destination: string, backHref: string): NextResponse {
     <p class="sub">Chúng tôi luôn cố gắng đảm bảo mọi liên kết đều an toàn, tuy nhiên bạn vẫn nên tự quét virus cho mọi tệp tải về.</p>
     <a class="go-btn" id="go" href="${safeDest}">
       <img src="/logo.png" alt="" />
-      <span class="spinner"></span>
       <span>Đang chuyển hướng...</span>
     </a>
     <a class="back" href="${backHref}">&lt; Quay lại VNSVault</a>
   </div>
-  <p class="notice">Liên kết này đã được ẩn để ngăn bot tự động thu thập trang, lập chỉ mục liên kết và gửi yêu cầu gỡ bỏ tự động. Nhấn nút phía trên nếu bạn không được tự động chuyển hướng.</p>
+  <p class="notice">Liên kết này đã được ẩn để ngăn bot tự động. Nhấn nút phía trên nếu bạn không được tự động chuyển hướng.</p>
 </div>
 <script>setTimeout(function(){ window.location.replace(${scriptDest}); }, 2000);</script>
 </body></html>`;

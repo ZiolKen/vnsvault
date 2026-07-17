@@ -110,7 +110,7 @@ function interstitialPage(destination: string, backHref: string): NextResponse {
        justify-content:center;padding:24px;}
   .wrap{width:100%;max-width:900px;}
   .banner{position:relative;width:100%;aspect-ratio:4100/493;
-          margin-bottom:28px;}
+          margin-bottom:28px;left:50%;transform:translateX(-50%);}
   .banner img{width:100%;height:100%;max-width:502px;max-height:55px;object-fit:cover;display:block;}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
         padding:40px 32px;text-align:center;}

@@ -1,6 +1,13 @@
-# VNSVault
+<br>
+<p align="center">
+<a href="https://vnsvault.qzz.io/" target="_blank">
+<img src="./src/public/logo.png" alt="VNSVault" height="250" width="250" style="border-radius: 16px;" />
+</a>
+</p>
 
-Kho tàng Visual Novel được Việt hóa — miễn phí, chất lượng cao, không quảng cáo.
+# <p align="center">VNSVault</p>
+
+<p align="center">Kho tàng Visual Novel được Việt hóa — miễn phí, chất lượng, không quảng cáo.</p>
 
 Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Aiven PostgreSQL**.
 

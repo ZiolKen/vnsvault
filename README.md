@@ -37,7 +37,7 @@ Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Aiven
 | Framework | Next.js 15 (App Router, Turbopack) |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS 3 |
-| Database | PostgreSQL (Aiven) — multi-shard |
+| Database | PostgreSQL (Supabase) — multi-shard |
 | DB Client | `pg` (node-postgres) |
 | Auth | JWT via `jose`, HttpOnly cookie, 7-day session |
 | Password | `bcryptjs` (cost factor 12) |
@@ -51,7 +51,7 @@ Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Aiven
 
 VNSVault dùng **capacity-based horizontal sharding** — KHÔNG phải primary/replica.
 
-- Mỗi `SHARD_N` là một Aiven PostgreSQL instance **độc lập** (có thể nằm ở account khác nhau)
+- Mỗi `SHARD_N` là một Supabase PostgreSQL instance **độc lập** (có thể nằm ở account khác nhau)
 - **WRITE** → luôn vào shard đầu tiên còn dưới ngưỡng `MAX_SHARD_BYTES` (mặc định 450 MB)
 - **READ** → `fanOut`: query song song tất cả shards, merge kết quả trong app
 - **UPDATE / DELETE** → `fanOut` hoặc `withRowTransaction` (xác định shard nào chứa row trước, rồi pin vào đó)
@@ -126,7 +126,7 @@ tự tắt sau 60 ngày repo không có commit — im lặng, dễ bỏ sót.
 ### Prerequisites
 
 - Node.js ≥ 18
-- Ít nhất 1 Aiven PostgreSQL instance (hoặc PostgreSQL bất kỳ)
+- Ít nhất 1 Supabase PostgreSQL instance (hoặc PostgreSQL bất kỳ)
 
 ### 1. Clone & cài dependencies
 
@@ -310,8 +310,6 @@ scripts/
 
 ### Lưu ý khi deploy
 
-- Build dùng `experimental.cpus: 3` để giới hạn worker song song, tránh vượt `max_connections` của Aiven
-- Pool size mỗi shard giới hạn ở `max: 2` (xem `src/lib/db/index.ts`). Lưu ý: đây là ceiling **cho mỗi instance function** — Vercel serverless spin nhiều instance song song khi traffic tăng, và các instance KHÔNG share pool với nhau, nên tổng connection thực tế là `N instance đang chạy × max × số shard`, không chỉ đơn thuần `cpus × max`. Với `max: 2` và vài shard, mức này vẫn đủ margin dưới limit 20 connection của Aiven free tier trong điều kiện traffic bình thường, nhưng traffic tăng đột biến vẫn có thể cần theo dõi thêm
 - **Shard-check cron** (`/api/internal/shard-check`) được trigger bởi **cron-job.org** (external, mỗi 5 phút) chứ không phải `crons` trong `vercel.json` — Vercel Hobby chỉ cho cron của chính Vercel chạy tối đa 1 lần/ngày, xem [Write-Shard Pointer](#write-shard-pointer-redis--cron) ở trên để biết lý do và cách setup
 - Set `CRON_SECRET` trong Vercel env vars **trước** khi tạo job trên cron-job.org, rồi copy đúng giá trị đó vào custom header `Authorization: Bearer ...` của job — 2 bên không tự đồng bộ, quên set thì route bỏ qua xác thực (không an toàn cho production)
 
@@ -321,7 +319,7 @@ scripts/
 
 Khi shard hiện tại gần đầy (gần ngưỡng `MAX_SHARD_BYTES`):
 
-1. Tạo Aiven PostgreSQL instance mới
+1. Tạo Supabase PostgreSQL instance mới
 2. Chạy `db:setup` với URL của instance mới:
    ```bash
    SHARD_3=postgresql://... npm run db:setup

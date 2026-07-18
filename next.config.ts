@@ -28,13 +28,6 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
-  // Limit parallel static-page workers during `next build`.
-  // Each worker spawns its own ShardedDb pools; too many workers
-  // simultaneously opening connections exhausts Aiven's max_connections.
-  experimental: {
-    cpus: 3,
-  },
-
   images: {
     remotePatterns: [
       // Wildcard https hostname turns /_next/image into an open proxy that

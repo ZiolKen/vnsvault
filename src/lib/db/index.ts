@@ -187,7 +187,7 @@ class ShardedDb {
           // headroom for the remaining genuinely-concurrent fanOut call
           // sites (e.g. the homepage's two Promise.all'd queries) without
           // raising the per-instance ceiling further.
-          max: 2,
+          max: 10,
           idleTimeoutMillis: 10_000,
           // Raised from 5s to 8s: with `max` lower, a request needing 2+
           // connections from the same shard's pool at once (still happens

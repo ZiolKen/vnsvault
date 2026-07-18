@@ -534,6 +534,29 @@ class ShardedDb {
       client.release();
     }
   }
+
+  /**
+   * Runs a trivial `SELECT 1` against every shard. Used only by the
+   * `/api/internal/keep-alive` cron route (see that file for why this
+   * exists — Supabase free-tier projects auto-pause after 7 days with no
+   * database request, and shard1/shard2 currently see near-zero organic
+   * traffic). Failures on individual shards are captured, not thrown, so
+   * one paused/unreachable shard doesn't stop the ping from reaching the
+   * others.
+   */
+  async pingAllShards(): Promise<{ index: number; ok: boolean; error?: string }[]> {
+    const pools = this.allPools();
+    return Promise.all(
+      pools.map(async (pool, index) => {
+        try {
+          await pool.query('SELECT 1');
+          return { index, ok: true };
+        } catch (e) {
+          return { index, ok: false, error: e instanceof Error ? e.message : String(e) };
+        }
+      })
+    );
+  }
 }
 
 export const db = new ShardedDb();

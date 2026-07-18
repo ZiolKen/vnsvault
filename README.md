@@ -9,7 +9,7 @@
 
 <p align="center">Kho tàng Visual Novel được Việt hóa — miễn phí, chất lượng, không quảng cáo.</p>
 
-Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Aiven PostgreSQL**.
+Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Supabase PostgreSQL**.
 
 ---
 

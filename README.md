@@ -1,7 +1,7 @@
 <br>
 <p align="center">
 <a href="https://vnsvault.qzz.io/" target="_blank">
-<img src="./src/public/logo.png" alt="VNSVault" height="250" width="250" style="border-radius: 16px;" />
+<img src="./public/logo.png" alt="VNSVault" height="250" width="250" style="border-radius: 16px;" />
 </a>
 </p>
 

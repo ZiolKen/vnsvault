@@ -196,3 +196,39 @@ export function isHttpUrl(url: string): boolean {
     return false;
   }
 }
+
+/**
+ * True if next/image can run its optimization pipeline on this URL without
+ * throwing "hostname not configured" — i.e. its host matches an entry in
+ * next.config.ts's `images.remotePatterns`. Everything else must render
+ * with the `unoptimized` prop instead, since admin-pasted cover/banner/
+ * avatar URLs can point at arbitrary hosts and next/image hard-errors on
+ * any host not in that allowlist.
+ *
+ * ⚠️ Keep this list in sync with next.config.ts's remotePatterns by hand —
+ * there's no way to import next.config.ts's values into a component
+ * (client or server) at runtime, so this is a deliberate duplication, not
+ * an oversight. `*.supabase.co` covers every uploaded image (see
+ * lib/storage.ts) since that's what actually made "use Next Image
+ * Optimize" worth doing — the rest were already-safe hosts that happened
+ * to be forced through the unoptimized path anyway.
+ */
+const OPTIMIZABLE_HOSTS = [
+  'i.imgur.com',
+  'imgur.com',
+  'cdn.discordapp.com',
+  'media.discordapp.net',
+  'i.ibb.co',
+  'res.cloudinary.com',
+];
+const OPTIMIZABLE_SUFFIX = '.supabase.co';
+
+export function canOptimizeImage(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname;
+    return OPTIMIZABLE_HOSTS.includes(host) || host.endsWith(OPTIMIZABLE_SUFFIX);
+  } catch {
+    return false; // relative paths (e.g. preset avatars under /avatars/*.svg) — Next handles those fine unoptimized
+  }
+}

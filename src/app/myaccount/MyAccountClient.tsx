@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { TurnstileWidget } from '@/components/ui/TurnstileWidget';
 import { PRESET_AVATARS } from '@/lib/avatars';
+import { canOptimizeImage } from '@/lib/utils';
+import { refreshNavUser } from '@/components/layout/Navbar';
 import type { BookmarkedGameRow } from '@/lib/queries';
 
 interface UserInfo {
@@ -22,11 +24,18 @@ interface VipStatus {
   expiresAt: string | null;
 }
 
+// Mirrors MAX_UPLOAD_BYTES in src/lib/storage.ts — kept in sync by hand,
+// see the same constant's comment in GameForm.tsx for why it can't just
+// be imported client-side.
+const MAX_UPLOAD_BYTES_CLIENT = 4 * 1024 * 1024;
+
 /* ───────────────────────────────────── Avatar picker ───── */
 function AvatarPicker({ user, onUpdated }: { user: UserInfo; onUpdated: (url: string) => void }) {
   const [selected, setSelected] = useState(user.avatar_url ?? '');
   const [customUrl, setCustomUrl] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [avatarTab, setAvatarTab] = useState<'url' | 'upload'>('url');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const isAdmin = user.role === 'admin';
@@ -40,8 +49,33 @@ function AvatarPicker({ user, onUpdated }: { user: UserInfo; onUpdated: (url: st
     });
     const d = await r.json().catch(() => null);
     setSaving(false);
-    if (r.ok && d?.success) { setMsg('Đã cập nhật avatar!'); onUpdated(url); setSelected(url); }
-    else setErr(d?.error ?? 'Lỗi cập nhật');
+    if (r.ok && d?.success) {
+      setMsg('Đã cập nhật avatar!'); onUpdated(url); setSelected(url); refreshNavUser();
+    } else setErr(d?.error ?? 'Lỗi cập nhật');
+  };
+
+  const uploadAvatar = async (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES_CLIENT) {
+      setErr(`Ảnh vượt quá giới hạn ${MAX_UPLOAD_BYTES_CLIENT / 1024 / 1024}MB.`);
+      return;
+    }
+    setUploading(true); setMsg(''); setErr('');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('folder', 'avatars');
+      const r = await fetch('/api/admin/upload', { method: 'POST', body });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.success) {
+        await save(d.data.url);
+      } else {
+        setErr(d?.error ?? 'Upload thất bại');
+      }
+    } catch {
+      setErr('Lỗi kết nối khi upload');
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -52,7 +86,7 @@ function AvatarPicker({ user, onUpdated }: { user: UserInfo; onUpdated: (url: st
       <div className="flex items-center gap-4 mb-5">
         <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-copper/30 bg-surface flex items-center justify-center shrink-0">
           {selected ? (
-            <Image src={selected} alt="Avatar hiện tại" width={64} height={64} unoptimized className="object-cover w-full h-full" />
+            <Image src={selected} alt="Avatar hiện tại" width={64} height={64} unoptimized={!canOptimizeImage(selected)} className="object-cover w-full h-full" />
           ) : (
             <span className="text-2xl font-bold text-copper-light">{user.username[0].toUpperCase()}</span>
           )}
@@ -93,27 +127,54 @@ function AvatarPicker({ user, onUpdated }: { user: UserInfo; onUpdated: (url: st
         ))}
       </div>
 
-      {/* Admin custom URL */}
+      {/* Admin custom URL / upload */}
       {isAdmin && (
         <div className="border-t border-border/40 pt-4 mt-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-copper mb-2">Admin — Custom URL</p>
-          <div className="flex gap-2">
-            <input
-              type="url"
-              value={customUrl}
-              onChange={e => setCustomUrl(e.target.value)}
-              placeholder="https://... hoặc /path/to/image"
-              className="input-base flex-1 text-sm"
-            />
-            <button
-              type="button"
-              onClick={() => { if (customUrl.trim()) save(customUrl.trim()); }}
-              disabled={saving || !customUrl.trim()}
-              className="btn-copper px-4 py-2 text-sm shrink-0 disabled:opacity-50"
-            >
-              Lưu
-            </button>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-copper">Admin — Ảnh Tùy Chỉnh</p>
+            <div className="flex text-xs rounded-lg border border-border overflow-hidden">
+              <button type="button" onClick={() => setAvatarTab('url')}
+                className={`px-2.5 py-1 transition-colors ${avatarTab === 'url' ? 'bg-copper/20 text-copper-light' : 'text-ghost-dim hover:text-ghost'}`}>
+                URL
+              </button>
+              <button type="button" onClick={() => setAvatarTab('upload')}
+                className={`px-2.5 py-1 transition-colors ${avatarTab === 'upload' ? 'bg-copper/20 text-copper-light' : 'text-ghost-dim hover:text-ghost'}`}>
+                Upload
+              </button>
+            </div>
           </div>
+
+          {avatarTab === 'url' ? (
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={customUrl}
+                onChange={e => setCustomUrl(e.target.value)}
+                placeholder="https://... hoặc /path/to/image"
+                className="input-base flex-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => { if (customUrl.trim()) save(customUrl.trim()); }}
+                disabled={saving || !customUrl.trim()}
+                className="btn-copper px-4 py-2 text-sm shrink-0 disabled:opacity-50"
+              >
+                Lưu
+              </button>
+            </div>
+          ) : (
+            <div>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                disabled={uploading || saving}
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = ''; }}
+                className="block w-full text-sm text-ghost-dim file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-copper/15 file:text-copper-light hover:file:bg-copper/25 file:cursor-pointer disabled:opacity-50"
+              />
+              {uploading && <p className="text-xs text-muted mt-1.5">Đang upload...</p>}
+              <p className="text-xs text-muted mt-1.5">JPEG/PNG/WebP/GIF, tối đa 4MB. Lưu vào Supabase Storage, tự động áp dụng làm avatar sau khi upload xong.</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -274,7 +335,7 @@ export default function MyAccountClient({ user, vip }: { user: UserInfo; vip: Vi
         <div className="flex items-center gap-5 mb-8 p-5 bg-surface border border-border rounded-2xl">
           <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-copper/30 bg-vault flex items-center justify-center shrink-0">
             {avatarUrl ? (
-              <Image src={avatarUrl} alt="Avatar" width={64} height={64} unoptimized className="object-cover w-full h-full" />
+              <Image src={avatarUrl} alt="Avatar" width={64} height={64} unoptimized={!canOptimizeImage(avatarUrl)} className="object-cover w-full h-full" />
             ) : (
               <span className="text-2xl font-bold text-copper-light">{user.username[0].toUpperCase()}</span>
             )}

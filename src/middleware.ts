@@ -17,8 +17,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, COOKIE_NAME } from '@/lib/jwt';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
+import { isMaintenanceOn } from '@/lib/maintenance';
 
 const PROTECTED = ['/admin', '/myaccount'];
+
+// Never gated by maintenance mode, even while it's ON:
+//  - /maintenance itself (avoid a rewrite loop)
+//  - /admin + /api/admin: an admin must still be able to log in, reach the
+//    dashboard, and flip the toggle back off
+//  - /api/auth: same reason — login has to keep working for an admin
+//  - /api/internal: cron-job.org's shard-check/keep-alive schedulers
+//    shouldn't start failing just because the site is in maintenance
+//  - /api/health: uptime monitors should keep seeing real status
+const MAINTENANCE_EXEMPT_PREFIXES = [
+  '/maintenance',
+  '/admin',
+  '/api/admin',
+  '/api/auth',
+  '/api/internal',
+  '/api/health',
+];
 
 // Paths that serve no legitimate purpose on this app and are almost always
 // automated scanners/exploit probes. Matched against the raw pathname
@@ -57,6 +75,13 @@ const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const API_RATE_LIMITS: { prefix: string; windowMs: number; max: number }[] = [
   { prefix: '/api/auth/login', windowMs: 60_000, max: 10 },
   { prefix: '/api/auth/register', windowMs: 60_000, max: 5 },
+  // Tighter than the generic /api rule: each request here carries a
+  // multipart file body and writes to Supabase Storage — worth a lower
+  // ceiling than plain JSON API calls even though the caller is already
+  // admin-gated (requireFreshAdmin runs inside the route itself, after
+  // this check). Must stay listed before the generic '/api/games' and
+  // '/api' rules below since the first matching prefix wins.
+  { prefix: '/api/admin/upload', windowMs: 60_000, max: 20 },
   { prefix: '/api/games', windowMs: 60_000, max: 120 }, // POST/PATCH/DELETE from admin panel
   { prefix: '/api', windowMs: 60_000, max: 240 },
 ];
@@ -84,6 +109,37 @@ export async function middleware(req: NextRequest) {
 
   if (BLOCKED_PATH_PATTERNS.some(pattern => pattern.test(pathname))) {
     return new NextResponse(null, { status: 404 });
+  }
+
+  // ── Maintenance mode ────────────────────────────────────────────────
+  // Checked before rate limiting/auth so a flipped-on flag takes effect
+  // immediately, and before spending a Node function invocation on
+  // anything DB-related. An admin session bypasses it entirely (so an
+  // admin can browse/verify the live site while it's "down" for everyone
+  // else); everyone else gets a rewrite to /maintenance for page requests,
+  // or a 503 JSON body for API requests.
+  if (!MAINTENANCE_EXEMPT_PREFIXES.some(p => pathname.startsWith(p)) && await isMaintenanceOn()) {
+    const token = req.cookies.get(COOKIE_NAME)?.value;
+    const session = token ? await verifyToken(token) : null;
+
+    if (session?.role !== 'admin') {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json(
+          { success: false, error: 'Website đang bảo trì, vui lòng quay lại sau.' },
+          { status: 503, headers: { 'Retry-After': '3600' } }
+        );
+      }
+      const url = req.nextUrl.clone();
+      url.pathname = '/maintenance';
+      // Not passing `{ status: 503 }` to rewrite() here — Next.js has had
+      // open bugs where a status override on rewrite() doesn't actually
+      // propagate (vercel/next.js#50155). The page still renders correctly
+      // as a 200; Retry-After is set as a best-effort hint for anything
+      // that reads it, but this isn't relied on for correctness.
+      const res = NextResponse.rewrite(url);
+      res.headers.set('Retry-After', '3600');
+      return withPrivateHeaders(res);
+    }
   }
 
   const isApiRoute = pathname.startsWith('/api/');

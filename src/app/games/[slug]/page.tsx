@@ -6,7 +6,7 @@ import Link from 'next/link';
 import type { Game, Platform } from '@/types';
 import {
   statusLabel, statusColor, engineLabel,
-  platformLabel, formatNumber, formatDate, safeJsonLd,
+  platformLabel, formatNumber, formatDate, safeJsonLd, canOptimizeImage,
 } from '@/lib/utils';
 import DownloadButton from '@/components/games/DownloadButton';
 import BookmarkButton from '@/components/games/BookmarkButton';
@@ -148,7 +148,7 @@ export default async function GameDetailPage({ params }: Props) {
           {/* Banner */}
           <div className="relative h-48 sm:h-72 md:h-96 overflow-hidden bg-vault">
             {game.banner_url || game.cover_url ? (
-              <Image src={(game.banner_url ?? game.cover_url)!} alt="" fill priority unoptimized className="object-cover object-top opacity-50" sizes="100vw" aria-hidden="true" />
+              <Image src={(game.banner_url ?? game.cover_url)!} alt="" fill priority unoptimized={!canOptimizeImage(game.banner_url ?? game.cover_url)} className="object-cover object-top opacity-50" sizes="100vw" aria-hidden="true" />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-copper/5 via-vault to-obsidian" aria-hidden="true" />
             )}
@@ -169,7 +169,7 @@ export default async function GameDetailPage({ params }: Props) {
                 <div className="shrink-0 flex justify-center lg:justify-start">
                   <div className="relative w-36 sm:w-44 md:w-52 aspect-[3/4] rounded-xl overflow-hidden border border-border/60 shadow-2xl shadow-black/80">
                     {game.cover_url ? (
-                      <Image src={game.cover_url} alt={`Ảnh bìa ${game.title}`} fill unoptimized className="object-cover" sizes="(max-width:640px) 144px,(max-width:768px) 176px,208px" priority />
+                      <Image src={game.cover_url} alt={`Ảnh bìa ${game.title}`} fill unoptimized={!canOptimizeImage(game.cover_url)} className="object-cover" sizes="(max-width:640px) 144px,(max-width:768px) 176px,208px" priority />
                     ) : (
                       <div className="absolute inset-0 bg-surface flex items-center justify-center">
                         <span className="font-cinzel text-5xl text-dim" aria-hidden="true">VN</span>

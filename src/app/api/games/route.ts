@@ -58,22 +58,41 @@ export async function GET(req: NextRequest) {
     // rows that actually belong on a LATER page once everything is merged).
     // Instead: fan out for every matching row from every shard, merge, then
     // sort + paginate in application code over the complete, correct set.
+    //
+    // `g.id ASC` tiebreaker matters here: page N and page N+1 are two
+    // separate HTTP requests, each running its own fanOut across shards.
+    // Without a deterministic tiebreaker, any row that TIES with another on
+    // orderCol (same updated_at down to the millisecond, same
+    // download_count, etc.) has no guaranteed relative order between the
+    // two requests — which shard's Promise.all() settled first can vary
+    // request to request. A tied row could land in the tail of page N's
+    // slice on one request and the head of page N+1's slice on the next,
+    // which is exactly what produced the "game duplicated across page
+    // boundaries" bug (never within a single page/request, only across
+    // two of them, matching how this was reported).
     const allMatches = await db.fanOut<Game>(
       `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug
        FROM games g
        LEFT JOIN translators t ON t.id = g.translator_id
        ${where}
-       ORDER BY g.${orderCol} DESC`,
+       ORDER BY g.${orderCol} DESC, g.id ASC`,
       values
     );
 
     allMatches.sort((a, b) => {
       const av = a[orderCol as keyof Game];
       const bv = b[orderCol as keyof Game];
+      let cmp: number;
       if (orderCol === 'created_at' || orderCol === 'updated_at') {
-        return new Date(bv as string).getTime() - new Date(av as string).getTime();
+        cmp = new Date(bv as string).getTime() - new Date(av as string).getTime();
+      } else {
+        cmp = Number(bv) - Number(av);
       }
-      return Number(bv) - Number(av);
+      if (cmp !== 0) return cmp;
+      // Same tiebreaker as the SQL ORDER BY above, re-applied here because
+      // this JS sort is what actually determines final order (the SQL
+      // ORDER BY only orders each shard's own rows before they're merged).
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
 
     const total = allMatches.length;

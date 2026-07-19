@@ -221,6 +221,50 @@ Dùng cho write-shard pointer — xem [Write-Shard Pointer (Redis + Cron)](#writ
 
 Không set `KV_REST_API_URL`/`KV_REST_API_TOKEN`? App tự fallback về sweep `pg_database_size` trực tiếp như trước khi có Redis — không crash, chỉ chậm hơn.
 
+### Ảnh Upload (Supabase Storage)
+
+Tính năng "Upload" trong form đăng game (cover/banner) và avatar admin (`/myaccount`)
+lưu ảnh vào Supabase Storage thay vì bắt buộc phải có sẵn URL ngoài. Đây là API
+Storage (REST), khác hoàn toàn với `SHARD_N` (connection string Postgres) — cần
+credentials riêng.
+
+**Setup (1 lần) trong Supabase dashboard, project SHARD_0** (uploads không sharded —
+xem comment đầu `src/lib/storage.ts` để biết lý do):
+
+1. **Storage → New bucket** → tên `vnsvault-uploads` (hoặc tên khác, khớp với
+   `SUPABASE_STORAGE_BUCKET`) → bật **Public bucket**.
+2. Bucket Public đã tự cho phép đọc công khai (ảnh hiển thị được trên site). Muốn
+   giới hạn ai được **ghi** vào bucket qua client thường (anon key) thì thêm RLS
+   policy — nhưng route upload của app dùng **service_role key** nên tự động bypass
+   RLS, không bắt buộc phải cấu hình policy ghi nếu bucket chỉ được ghi qua route
+   này.
+3. Lấy `SUPABASE_URL` và `SUPABASE_SERVICE_ROLE_KEY` ở **Project Settings → API**.
+
+| Variable | Required? | Description |
+|---|---|---|
+| `SUPABASE_URL` | Có (để bật upload) | Project URL, dạng `https://<ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Có (để bật upload) | Service role key — **secret**, chỉ dùng server-side, không bao giờ lộ ra client |
+| `SUPABASE_STORAGE_BUCKET` | Không, mặc định `vnsvault-uploads` | Tên bucket |
+
+Không set 2 biến bắt buộc? `/api/admin/upload` trả về 503, nhưng form vẫn dùng được
+bình thường qua tab URL (không có gì hỏng, upload chỉ là tuỳ chọn thêm).
+
+Giới hạn: JPEG/PNG/WebP/GIF, tối đa 4MB/ảnh — xem `MAX_UPLOAD_BYTES` trong
+`src/lib/storage.ts` nếu muốn đổi.
+
+### Chế Độ Bảo Trì (Maintenance Mode)
+
+Bật/tắt tại **`/admin/maintenance`**. Cờ lưu ở Redis (KHÔNG phải DB — middleware
+chạy Edge runtime, không gọi được `pg`, xem comment đầu `src/lib/maintenance.ts`),
+nên **bắt buộc phải có Redis đã cấu hình** (mục Redis ở trên) thì tính năng này mới
+hoạt động — không set Redis thì maintenance mode coi như luôn tắt (fail open, không
+khoá nhầm cả site nếu Redis lỗi).
+
+Khi bật: mọi request công khai (trừ `/admin`, `/api/admin`, `/api/auth`,
+`/api/internal`, `/api/health`) bị chặn ở tầng middleware — trang thường thấy
+`/maintenance`, API trả 503 JSON. Session admin bypass hoàn toàn để kiểm tra site
+trước khi tắt lại.
+
 ---
 
 ## Scripts

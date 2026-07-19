@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/admin/reports',   label: '🚩 Báo Lỗi Link' },
   { href: '/admin/users',     label: '👑 Quản Lý VIP' },
   { href: '/admin/announcement', label: '📢 Thông Báo' },
+  { href: '/admin/maintenance', label: '🚧 Bảo Trì' },
 ];
 
 function SidebarContent({ username, onClose }: { username: string; onClose?: () => void }) {

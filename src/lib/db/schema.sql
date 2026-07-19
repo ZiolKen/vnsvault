@@ -347,13 +347,38 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- games gets its OWN updated_at function (not the generic one above)
+-- because view_count/download_count on this table are incremented on
+-- essentially every page view / download click (see
+-- src/lib/queries.ts and src/app/api/games/[slug]/download/**) — those
+-- are traffic counters, not content edits. Using the generic
+-- update_updated_at() here meant "Mới cập nhật" (sort by updated_at) was
+-- really sorting by "most recently viewed/downloaded": any already-popular
+-- game gets bumped back to the top on literally the next page view,
+-- permanently burying a genuinely new/edited game underneath it within
+-- minutes. Comparing to_jsonb() with those two counter columns excluded
+-- means updated_at only moves when something an admin actually edited
+-- (title, description, cover, status, genres via the games row itself,
+-- etc.) changes.
+CREATE OR REPLACE FUNCTION update_games_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (to_jsonb(OLD) - 'view_count' - 'download_count' - 'updated_at')
+     IS DISTINCT FROM
+     (to_jsonb(NEW) - 'view_count' - 'download_count' - 'updated_at') THEN
+    NEW.updated_at = NOW();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Postgres has no `CREATE TRIGGER IF NOT EXISTS` — DROP + CREATE is the
 -- portable way to make this safe to re-run (new shard added later, script
 -- re-run after a partial failure, etc.), consistent with every other
 -- statement in this file already being idempotent.
 DROP TRIGGER IF EXISTS games_updated_at ON games;
 CREATE TRIGGER games_updated_at BEFORE UPDATE ON games
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION update_games_updated_at();
 
 DROP TRIGGER IF EXISTS users_updated_at ON users;
 CREATE TRIGGER users_updated_at BEFORE UPDATE ON users

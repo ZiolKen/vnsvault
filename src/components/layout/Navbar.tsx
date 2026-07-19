@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
+import { canOptimizeImage } from '@/lib/utils';
 
 interface NavUser { username: string; role: string; avatar_url?: string; }
 
@@ -11,6 +12,18 @@ const NAV_LINKS = [
   { href: '/requests', label: 'Đề Xuất' },
   { href: '/donate', label: 'Ủng Hộ' },
 ];
+
+const NAV_USER_REFRESH_EVENT = 'vnsvault:refresh-nav-user';
+
+/**
+ * Call this after any change that re-signs the session cookie client-side
+ * without a full page navigation (currently: avatar update on
+ * /myaccount) so Navbar picks it up immediately instead of showing stale
+ * data until the next full reload.
+ */
+export function refreshNavUser() {
+  window.dispatchEvent(new Event(NAV_USER_REFRESH_EVENT));
+}
 
 export default function Navbar() {
   const [user, setUser] = useState<NavUser | null>(null);
@@ -67,7 +80,23 @@ export default function Navbar() {
     }
 
     loadUser();
-    return () => { cancelled = true; controller.abort(); };
+
+    // Navbar only fetches /api/auth/me once on mount — fine for a fresh
+    // page load, but a client-side-only change (e.g. picking a new avatar
+    // on /myaccount, which re-signs the session cookie server-side but
+    // doesn't trigger a full page navigation) would otherwise leave this
+    // component showing the stale avatar/username until the next full
+    // reload. `refreshNavUser()` (exported below) dispatches this event
+    // from wherever the profile actually changes, so Navbar re-fetches
+    // immediately instead of requiring a manual refresh.
+    const onRefresh = () => loadUser();
+    window.addEventListener(NAV_USER_REFRESH_EVENT, onRefresh);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.removeEventListener(NAV_USER_REFRESH_EVENT, onRefresh);
+    };
   }, []);
 
   const logout = async () => {
@@ -156,7 +185,7 @@ export default function Navbar() {
                 >
                   <span className="w-6 h-6 rounded-full bg-copper/20 flex items-center justify-center text-copper-light text-xs font-bold overflow-hidden shrink-0" aria-hidden="true">
                     {user.avatar_url
-                      ? <Image src={user.avatar_url} alt="" width={24} height={24} unoptimized className="object-cover w-full h-full" />
+                      ? <Image src={user.avatar_url} alt="" width={24} height={24} unoptimized={!canOptimizeImage(user.avatar_url)} className="object-cover w-full h-full" />
                       : user.username[0].toUpperCase()}
                   </span>
                   <span className="text-ghost-dim max-w-[100px] truncate">{user.username}</span>

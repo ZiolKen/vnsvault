@@ -2,7 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { CSSProperties } from 'react';
 import type { Game, Platform } from '@/types';
-import { statusLabel, statusColor, engineLabel, platformIcon, formatNumber } from '@/lib/utils';
+import { statusLabel, statusColor, engineLabel, platformIcon, formatNumber, canOptimizeImage } from '@/lib/utils';
 
 interface Props {
   game: Game;
@@ -33,7 +33,7 @@ export default function GameCard({ game, rank, className, style }: Props) {
               src={game.cover_url}
               alt={`Ảnh bìa ${game.title}`}
               fill
-              unoptimized
+              unoptimized={!canOptimizeImage(game.cover_url)}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className="object-cover group-hover:scale-105 transition-transform duration-500"
               loading="lazy"

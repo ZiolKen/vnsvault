@@ -6,6 +6,7 @@ import type { Game, Genre } from '@/types';
 import FormField from '@/components/ui/FormField';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { canOptimizeImage } from '@/lib/utils';
 
 interface DownloadEntry { version: string; platform: string; url: string; label: string; }
 
@@ -25,6 +26,101 @@ const blank = {
   engine: '', status: 'in_progress', age_rating: 'all',
   translator_id: '', translator_note: '', is_featured: false, published: false,
 };
+
+// Mirrors MAX_UPLOAD_BYTES in src/lib/storage.ts — can't import that file
+// client-side (it also wires up the Supabase service-role client), so this
+// is a deliberate, manually-kept-in-sync duplicate. Used only for an
+// early client-side check so an oversized file gets a clear Vietnamese
+// error immediately instead of a wasted round trip that would otherwise
+// either hit our own 400 or, above ~4.5MB, Vercel's platform-level 413.
+const MAX_UPLOAD_BYTES_CLIENT = 4 * 1024 * 1024;
+
+/**
+ * URL input + file upload for cover/banner. Keeps the old paste-a-URL flow
+ * as the default (still the fastest path for an admin who already has the
+ * image hosted somewhere), and adds an "Upload" tab that POSTs to
+ * /api/admin/upload and writes the returned Supabase Storage URL into the
+ * exact same field — the parent form never needs to know which path was
+ * used, both end up as a plain string in form.cover_url / form.banner_url.
+ */
+function ImageUploadField({ label, value, onChange }: {
+  label: string; value: string; onChange: (url: string) => void;
+}) {
+  const toast = useToast();
+  const [mode, setMode] = useState<'url' | 'upload'>('url');
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES_CLIENT) {
+      toast.push(`Ảnh vượt quá giới hạn ${MAX_UPLOAD_BYTES_CLIENT / 1024 / 1024}MB.`, 'error');
+      return;
+    }
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('folder', 'games');
+      const r = await fetch('/api/admin/upload', { method: 'POST', body });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.success) {
+        onChange(d.data.url);
+        toast.push('Đã upload ảnh', 'success');
+      } else {
+        toast.push(d?.error ?? 'Upload thất bại', 'error');
+      }
+    } catch {
+      toast.push('Lỗi kết nối khi upload', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="text-xs text-muted uppercase tracking-wider">{label}</label>
+        <div className="flex text-xs rounded-lg border border-border overflow-hidden">
+          <button type="button" onClick={() => setMode('url')}
+            className={`px-2.5 py-1 transition-colors ${mode === 'url' ? 'bg-copper/20 text-copper-light' : 'text-ghost-dim hover:text-ghost'}`}>
+            URL
+          </button>
+          <button type="button" onClick={() => setMode('upload')}
+            className={`px-2.5 py-1 transition-colors ${mode === 'upload' ? 'bg-copper/20 text-copper-light' : 'text-ghost-dim hover:text-ghost'}`}>
+            Upload
+          </button>
+        </div>
+      </div>
+
+      {mode === 'url' ? (
+        <input
+          type="text"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder="https://..."
+          className="input-base w-full text-sm"
+        />
+      ) : (
+        <div>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            disabled={uploading}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
+            className="block w-full text-sm text-ghost-dim file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-copper/15 file:text-copper-light hover:file:bg-copper/25 file:cursor-pointer disabled:opacity-50"
+          />
+          {uploading && <p className="text-xs text-muted mt-1.5">Đang upload...</p>}
+          <p className="text-xs text-muted mt-1.5">JPEG/PNG/WebP/GIF, tối đa 4MB. Lưu vào Supabase Storage.</p>
+        </div>
+      )}
+
+      {value && (
+        <div className="relative mt-2 h-32 rounded-lg border border-border overflow-hidden">
+          <Image src={value} alt="preview" fill unoptimized={!canOptimizeImage(value)} className="object-cover" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function GameForm({ initial, gameId }: Props) {
   const router = useRouter();
@@ -177,28 +273,8 @@ export default function GameForm({ initial, gameId }: Props) {
         <section className="bg-surface border border-border rounded-xl p-5">
           <h2 className="font-heading text-sm font-bold text-ghost mb-4">Hình Ảnh</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <FormField label="URL Ảnh Bìa (Cover)" value={form.cover_url} onChange={e => set('cover_url', e.target.value)}
-                placeholder="https://..." />
-              {form.cover_url && (
-                <div className="relative mt-2 h-32 rounded-lg border border-border overflow-hidden">
-                  {/* unoptimized: admin can paste any external host, so we
-                      skip Next's optimization pipeline (which requires
-                      pre-allowlisting domains) — still avoids the raw <img>
-                      lint warning since this renders through next/image. */}
-                  <Image src={form.cover_url} alt="preview" fill unoptimized className="object-cover" />
-                </div>
-              )}
-            </div>
-            <div>
-              <FormField label="URL Banner (Tùy chọn)" value={form.banner_url} onChange={e => set('banner_url', e.target.value)}
-                placeholder="https://..." />
-              {form.banner_url && (
-                <div className="relative mt-2 h-32 rounded-lg border border-border overflow-hidden">
-                  <Image src={form.banner_url} alt="preview" fill unoptimized className="object-cover" />
-                </div>
-              )}
-            </div>
+            <ImageUploadField label="Ảnh Bìa (Cover)" value={form.cover_url} onChange={url => set('cover_url', url)} />
+            <ImageUploadField label="Banner (Tùy chọn)" value={form.banner_url} onChange={url => set('banner_url', url)} />
           </div>
         </section>
 

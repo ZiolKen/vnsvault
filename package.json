@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@upstash/redis": "^1.38.0",
+    "@supabase/supabase-js": "^2.48.1",
     "@vercel/analytics": "^1.4.1",
     "@vercel/speed-insights": "^2.0.0",
     "bcryptjs": "^2.4.3",

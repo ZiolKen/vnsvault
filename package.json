@@ -11,6 +11,8 @@
     "type-check": "tsc --noEmit",
     "db:setup": "node scripts/db-setup.mjs",
     "db:reset": "node scripts/db-reset.mjs",
+    "db:check-genres": "node scripts/check-genre-shards.mjs",
+    "db:fix-genre-ids": "node scripts/fix-genre-shard-ids.mjs",
     "create-admin": "node scripts/create-admin.mjs",
     "list-users": "node scripts/list-users.mjs",
     "delete-user": "node scripts/delete-user.mjs",

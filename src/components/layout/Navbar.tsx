@@ -305,8 +305,10 @@ export default function Navbar() {
           {user ? (
             <div className="space-y-1">
               <div className="flex items-center gap-3 px-4 py-3 mb-2">
-                <span className="w-9 h-9 rounded-full bg-copper/20 flex items-center justify-center text-copper-light font-bold" aria-hidden="true">
-                  {user.username[0].toUpperCase()}
+                <span className="w-9 h-9 rounded-full bg-copper/20 flex items-center justify-center text-copper-light font-bold overflow-hidden shrink-0" aria-hidden="true">
+                  {user.avatar_url
+                    ? <Image src={user.avatar_url} alt="" width={36} height={36} unoptimized={!canOptimizeImage(user.avatar_url)} className="object-cover w-full h-full" />
+                    : user.username[0].toUpperCase()}
                 </span>
                 <div>
                   <p className="text-sm font-medium text-ghost">{user.username}</p>

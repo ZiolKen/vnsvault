@@ -21,13 +21,20 @@ export async function GET() {
     );
 
     // fanOut may return duplicates if multiple shards hold the genres table
-    // (every shard has genres seeded); deduplicate by id, keep first seen.
-    const seen = new Set<number>();
-    const genres: GenreRow[] = [];
+    // (every shard has genres seeded). Deduplicating by id alone isn't
+    // enough: a shard that was seeded with SERIAL auto-increment *before*
+    // explicit IDs were pinned in schema.sql may hold the same genre
+    // (same name/slug) under a different id — the id-only Set would let
+    // both rows through, showing the same tag twice in GameForm. `slug` is
+    // UNIQUE NOT NULL and is the one thing guaranteed to match across
+    // shards for "the same genre", so dedupe on that instead, keeping the
+    // lowest id (the pinned/canonical one) per slug.
+    const bySlug = new Map<string, GenreRow>();
     for (const r of rows) {
-      if (!seen.has(r.id)) { seen.add(r.id); genres.push(r); }
+      const existing = bySlug.get(r.slug);
+      if (!existing || r.id < existing.id) bySlug.set(r.slug, r);
     }
-    genres.sort((a, b) => a.id - b.id);
+    const genres = Array.from(bySlug.values()).sort((a, b) => a.id - b.id);
 
     return NextResponse.json({ success: true, data: genres });
   } catch (e) {

@@ -57,12 +57,7 @@ export interface Game {
   id: string;
   title: string;
   slug: string;
-  // Optional, not required: /api/games (list) deliberately omits this column
-  // to avoid shipping full descriptions for every row in a paginated list —
-  // only /games/[slug] (via getGameBySlug) selects the full row including
-  // description. Anywhere this type is used for a list result, treat
-  // `description` as absent.
-  description?: string;
+  description: string;
   cover_url?: string;
   banner_url?: string;
   developer?: string;

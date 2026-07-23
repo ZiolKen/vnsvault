@@ -244,12 +244,12 @@ export default function GameForm({ initial, gameId }: Props) {
               </select>
             </div>
             <div>
-              <label className={labelCls}>Trạng thái dịch</label>
+              <label className={labelCls}>Ngôn ngữ</label>
               <select value={form.status} onChange={e => set('status', e.target.value)} className={inputCls}>
-                <option value="in_progress">Đang dịch</option>
-                <option value="completed">Hoàn thành</option>
-                <option value="paused">Tạm ngưng</option>
-                <option value="demo">Demo</option>
+                <option value="completed">Việt Hoá</option>
+                <option value="in_progress">Tiếng Nhật</option>
+                <option value="paused">Tiếng Trung</option>
+                <option value="demo">Tiếng Anh</option>
               </select>
             </div>
             <div>

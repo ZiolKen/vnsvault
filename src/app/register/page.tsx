@@ -7,6 +7,7 @@ import { TurnstileWidget } from '@/components/ui/TurnstileWidget';
 import FormField from '@/components/ui/FormField';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { refreshNavUser } from '@/components/layout/Navbar';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ username: '', email: '', password: '' });
@@ -37,6 +38,7 @@ export default function RegisterPage() {
         toast.push(`Chào mừng ${form.username}! Tài khoản đã được tạo.`, 'success');
         router.push('/');
         router.refresh();
+        refreshNavUser();
       }
       else setError(d.error ?? 'Đăng ký thất bại');
     } finally { setLoading(false); }

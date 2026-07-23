@@ -35,10 +35,19 @@ export async function POST(req: NextRequest) {
     // (very rare) case of a cross-shard duplicate email/username slipping
     // through, this returns whichever shard responds with a match; expected
     // to be unique in practice since registration checks all shards first.
+    //
+    // Email side is lowercased before comparing: registration always stores
+    // `email` normalized to lowercase (see /api/auth/register), but this
+    // query used to compare the identifier as typed — so an account
+    // registered as "User@Example.com" (stored as "user@example.com") could
+    // never log back in with any different casing of the email, even
+    // though it's the same address. Username is intentionally left
+    // case-sensitive (as-is) since register() never lowercases it either.
+    const trimmed = identifier.trim();
     const rows = await db.fanOut<User & { password_hash: string }>(
       `SELECT id, username, email, role, avatar_url, password_hash
-       FROM users WHERE email = $1 OR username = $1 LIMIT 1`,
-      [identifier.trim()]
+       FROM users WHERE email = $1 OR username = $2 LIMIT 1`,
+      [trimmed.toLowerCase(), trimmed]
     );
 
     const user = rows[0];

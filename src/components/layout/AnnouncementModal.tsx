@@ -24,6 +24,20 @@ import type { Announcement } from '@/types';
  * Hidden on /admin (internal tooling, not a storefront) — same convention
  * as VipAnnouncementBar.
  */
+const ANNOUNCEMENT_REFRESH_EVENT = 'vnsvault:refresh-announcement';
+
+/**
+ * Call this right after saving the announcement in the admin panel so
+ * this modal re-fetches immediately. Without it, since this component
+ * only fetches once per mount (see below), an admin who saves a new
+ * version and then navigates home via the logo (a client-side route
+ * change, not a full reload) would see stale — or no — announcement data
+ * until a manual page refresh.
+ */
+export function refreshAnnouncement() {
+  window.dispatchEvent(new Event(ANNOUNCEMENT_REFRESH_EVENT));
+}
+
 export default function AnnouncementModal() {
   const pathname = usePathname();
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
@@ -32,18 +46,19 @@ export default function AnnouncementModal() {
   // Fetched once on mount (this component lives in the root layout, so it
   // mounts exactly once per session) rather than re-fetching per route —
   // the pathname check below only controls whether it's ALLOWED to show,
-  // not whether it fetches.
+  // not whether it fetches. `refreshAnnouncement()` above is the escape
+  // hatch for the one case that needs an immediate re-fetch anyway.
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    async function load() {
       try {
-        const res = await fetch('/api/announcement');
+        const res = await fetch('/api/announcement', { cache: 'no-store' });
         const json = await res.json();
         if (cancelled || !json?.success || !json.data) return;
 
         const ann: Announcement = json.data;
-        if (!ann.enabled) return;
+        if (!ann.enabled) { setAnnouncement(null); setOpen(false); return; }
 
         const dismissal = await getAnnouncementDismissal();
         if (isDismissalActive(dismissal, ann.version)) return;
@@ -55,9 +70,17 @@ export default function AnnouncementModal() {
       } catch {
         // Fail soft — no popup rather than a broken page.
       }
-    })();
+    }
 
-    return () => { cancelled = true; };
+    load();
+
+    const onRefresh = () => load();
+    window.addEventListener(ANNOUNCEMENT_REFRESH_EVENT, onRefresh);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(ANNOUNCEMENT_REFRESH_EVENT, onRefresh);
+    };
   }, []);
 
   const hiddenHere = pathname?.startsWith('/admin');

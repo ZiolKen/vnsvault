@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { TurnstileWidget } from '@/components/ui/TurnstileWidget';
 import FormField from '@/components/ui/FormField';
 import Button from '@/components/ui/Button';
+import { refreshNavUser } from '@/components/layout/Navbar';
 
 function LoginForm() {
   const [form, setForm] = useState({ identifier: '', password: '' });
@@ -38,6 +39,7 @@ function LoginForm() {
             : '/';
         router.push(destination);
         router.refresh();
+        refreshNavUser();
       }
       else setError(d.error ?? 'Đăng nhập thất bại');
     } finally { setLoading(false); }

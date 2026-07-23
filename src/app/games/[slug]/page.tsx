@@ -243,7 +243,7 @@ export default async function GameDetailPage({ params }: Props) {
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted px-4 py-3 border-b border-border">THÔNG TIN CƠ BẢN</p>
                 <dl>
                   {[
-                    { label: 'Trạng thái dịch', value: statusLabel(game.status) },
+                    { label: 'Ngôn ngữ', value: statusLabel(game.status) },
                     { label: 'Phiên bản', value: versions.length > 0 ? versions.join(', ') : null },
                     { label: 'Dịch giả', value: game.translator?.name ?? null },
                     { label: 'Engine phát triển', value: game.engine ? engineLabel(game.engine) : null },

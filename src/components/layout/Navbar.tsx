@@ -121,7 +121,7 @@ export default function Navbar() {
   return (
     <>
       <nav
-        className={`fixed top-0 inset-x-0 z-50 glass border-b border-border/60 transition-shadow duration-300 ${scrolled ? 'shadow-xl shadow-black/40' : ''}`}
+        className={`site-nav fixed top-0 inset-x-0 z-50 glass border-b border-border/60 transition-shadow duration-300 ${scrolled ? 'shadow-xl shadow-black/40' : ''}`}
         role="navigation"
         aria-label="Điều hướng chính"
       >
@@ -281,7 +281,7 @@ export default function Navbar() {
         role="dialog"
         aria-label="Menu điều hướng"
       >
-        <nav className="flex-1 overflow-y-auto p-4" aria-label="Menu mobile">
+        <nav className="site-nav flex-1 overflow-y-auto p-4" aria-label="Menu mobile">
           {/* Nav links */}
           <div className="space-y-1 mb-6">
             {NAV_LINKS.map(l => (

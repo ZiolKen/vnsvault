@@ -248,6 +248,12 @@ html { overflow-y: scroll; }
   border-color: rgba(239,68,68,0.8);
   outline-color: rgba(239,68,68,0.6);
 }
+/* Higher-specificity override for inputs with a trailing icon (e.g. the
+   show/hide-password toggle). Without this, .input-base's own `padding`
+   shorthand — defined after @tailwind utilities in the cascade — wins
+   over the `pr-10` utility class at equal specificity, so the input ends
+   up with less reserved right-hand space than the icon needs. */
+.input-base.has-trailing { padding-right: 2.5rem; }
 
 /* ── Toast stack ──────────────────────────────────────────── */
 .toast-stack {
@@ -344,7 +350,7 @@ html { overflow-y: scroll; }
    44x44px, turning tight little pills into oversized blobs. */
 @media (pointer: coarse) {
   button, [role="button"] { min-height: 44px; min-width: 44px; }
-  nav a { min-height: 48px; }
+  nav.site-nav a { min-height: 48px; }
 }
 
 /* ── Reduced motion ───────────────────────────────────────── */

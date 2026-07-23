@@ -460,6 +460,72 @@ class ShardedDb {
    * Throws RowNotFoundError if no shard has a matching row — callers
    * should catch this and return a 404.
    */
+  /**
+   * Read-mostly counterpart to withRowTransaction, for hot paths (the game
+   * detail page) that don't need rollback-on-error semantics. Two savings
+   * over withRowTransaction:
+   *
+   *  1. No separate probe query — `selectSql` itself (the real row the
+   *     caller wants) is fanned out to every shard in parallel and
+   *     doubles as the existence check, instead of first firing a cheap
+   *     `SELECT 1` probe and then a second, separate full SELECT once the
+   *     owning shard is known.
+   *  2. No BEGIN/COMMIT — those add two more sequential round trips that
+   *     only matter for atomicity/rollback, which a read (plus a
+   *     best-effort counter bump `fn` already swallows errors for) never
+   *     needed in the first place.
+   *
+   * Returns null if no shard has a matching row (same "not found" case
+   * withRowTransaction signals via RowNotFoundError, just without the
+   * throw/catch ceremony since there's nothing to roll back here).
+   */
+  async withRow<TRow, TResult>(
+    selectSql: string,
+    selectValues: unknown[],
+    fn: (client: PoolClient, row: TRow) => Promise<TResult>
+  ): Promise<TResult | null> {
+    this.init();
+    if (this.shards.length === 0) {
+      throw new Error('[ShardedDb.withRow] No shards configured — set SHARD_0 or DATABASE_URL.');
+    }
+
+    let allFailed = true;
+    const attempts = await Promise.all(
+      this.shards.map(async shard => {
+        try {
+          const res = await shard.pool.query(selectSql, selectValues);
+          allFailed = false;
+          return { index: shard.index, row: res.rows[0] as TRow | undefined };
+        } catch (e) {
+          console.error(`[ShardedDb.withRow] query failed on shard ${shard.index}:`, e);
+          return { index: shard.index, row: undefined as TRow | undefined };
+        }
+      })
+    );
+
+    if (allFailed) {
+      throw new Error('[ShardedDb.withRow] All shards failed — database may be unreachable.');
+    }
+
+    const hit = attempts.find(a => a.row !== undefined);
+    if (!hit) return null;
+
+    let client: PoolClient;
+    try {
+      client = await this.shards[hit.index].pool.connect();
+    } catch (e) {
+      console.error(`[ShardedDb.withRow] connect failed on shard ${hit.index}, waiting ${CONNECT_RETRY_DELAY_MS}ms before retrying once:`, e);
+      await sleep(CONNECT_RETRY_DELAY_MS);
+      client = await this.shards[hit.index].pool.connect();
+    }
+
+    try {
+      return await fn(client, hit.row as TRow);
+    } finally {
+      client.release();
+    }
+  }
+
   async withRowTransaction<T>(
     table: string,
     idColumn: string,

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import AnnouncementBody from '@/components/announcement/AnnouncementBody';
+import { refreshAnnouncement } from '@/components/layout/AnnouncementModal';
 import type { Announcement, AnnouncementParagraph, AnnouncementSegment, AnnouncementTone } from '@/types';
 
 // Editor-local segment shape — always has every field present (unlike the
@@ -121,6 +122,7 @@ export default function AnnouncementForm() {
       if (d.success) {
         setVersion(d.data.version);
         toast.push('Đã lưu thông báo — hiển thị lại cho mọi khách đã từng đóng.', 'success');
+        refreshAnnouncement();
       } else {
         setError(d.error ?? 'Lỗi lưu thông báo');
         toast.push(d.error ?? 'Lỗi lưu thông báo', 'error');

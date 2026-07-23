@@ -9,10 +9,10 @@ import type { Game } from '@/types';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Tất cả' },
-  { value: 'completed', label: '✓ Hoàn Thành' },
-  { value: 'in_progress', label: '⟳ Đang Dịch' },
-  { value: 'paused', label: '⏸ Tạm Ngưng' },
-  { value: 'demo', label: '◈ Demo' },
+  { value: 'completed', label: '✓ Việt Hoá' },
+  { value: 'in_progress', label: '⟳ Tiếng Nhật' },
+  { value: 'paused', label: '⏸ Tiếng Trung' },
+  { value: 'demo', label: '◈ Tiếng Anh' },
 ];
 const ENGINE_OPTIONS = [
   { value: '', label: 'Tất cả' },
@@ -139,7 +139,7 @@ function SidebarContent({ status, engine, tags, allGenres, onStatus, onEngine, o
           </button>
         )}
       </div>
-      <FilterGroup label="Trạng thái dịch" options={STATUS_OPTIONS} value={status} onChange={onStatus} />
+      <FilterGroup label="Ngôn ngữ" options={STATUS_OPTIONS} value={status} onChange={onStatus} />
       <div className="border-t border-border/40" />
       <FilterGroup label="Game Engine" options={ENGINE_OPTIONS} value={engine} onChange={onEngine} />
       <div className="border-t border-border/40" />

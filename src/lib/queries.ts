@@ -11,7 +11,7 @@
  *    no network hop, no cache issues, always fresh.
  */
 
-import { db, RowNotFoundError } from '@/lib/db';
+import { db } from '@/lib/db';
 import type { Game } from '@/types';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -99,6 +99,23 @@ export async function getHotGames(limit = 8): Promise<Game[]> {
 }
 
 /**
+ * Get the most recently added published games.
+ * Used by the landing page "Mới Thêm" section.
+ */
+export async function getNewGames(limit = 8): Promise<Game[]> {
+  const rows = await db.fanOut<GameRow>(
+    `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug
+     FROM games g
+     LEFT JOIN translators t ON t.id = g.translator_id
+     WHERE g.published = TRUE
+     ORDER BY g.created_at DESC`
+  );
+  rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const top = rows.slice(0, limit) as unknown as Game[];
+  return attachGenres(top);
+}
+
+/**
  * Get featured published games.
  * Used by the landing page "Được Chọn Lọc" section.
  */
@@ -121,7 +138,7 @@ export async function getFeaturedGames(limit = 4): Promise<Game[]> {
  * highest-traffic query in the app (every real visit to a game page, no
  * ISR/cache on this route since view_count must bump per view).
  *
- * ★ Pinned to a single shard ★
+ * ★ Pinned to a single shard, no probe, no explicit transaction ★
  * This used to fan out FOUR separate queries to EVERY shard — the main
  * row, then genres/downloads/bookmark-count concurrently via Promise.all,
  * then a fire-and-forget view-count UPDATE. On a 3-shard setup that's up
@@ -133,33 +150,49 @@ export async function getFeaturedGames(limit = 4): Promise<Game[]> {
  * shard as the game row (they're written together via
  * withNewRowTransaction/withRowTransaction — see db/index.ts), so once we
  * know which shard holds the game, there's no reason to ask the others.
- * withRowTransaction() probes every shard ONCE with a cheap indexed
- * `SELECT 1` to find the right one, then runs everything else — genres,
- * downloads, bookmark count, and the view-count bump — over that ONE held
- * connection. Net effect: connection usage for a game-page view drops from
- * O(shards) to O(1) for the expensive part.
+ * `db.withRow()` fans the real game+translator SELECT out to every shard
+ * in parallel — that single round trip both finds the owning shard AND
+ * fetches the row, instead of a separate cheap `SELECT 1` probe followed
+ * by a second full SELECT — then runs genres, downloads, bookmark count,
+ * and the view-count bump over that ONE held connection, with no
+ * BEGIN/COMMIT wrapper (this is read-mostly; the view-count bump already
+ * swallows its own errors, so there's nothing here that needs rollback
+ * semantics). Net effect versus the old fan-out-everything approach:
+ * connection usage for a game-page view drops from O(shards) to O(1) for
+ * the expensive part, and versus the previous single-shard version, two
+ * fewer sequential round trips (no probe, no BEGIN/COMMIT).
  */
 export async function getGameBySlug(slug: string): Promise<Game | null> {
-  try {
-    return await db.withRowTransaction<Game | null>('games', 'slug', slug, async (client) => {
-      const gameRes = await client.query<GameRow>(
-        `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug,
-                t.bio AS translator_bio, t.discord_url AS translator_discord,
-                t.avatar_url AS translator_avatar
-         FROM games g
-         LEFT JOIN translators t ON t.id = g.translator_id
-         WHERE g.slug = $1 AND g.published = TRUE
-         LIMIT 1`,
-        [slug]
-      );
-      const gameRow = gameRes.rows[0];
-      // withRowTransaction's probe only checks slug existence, not
-      // `published` — an unpublished draft with a matching slug still
-      // routes here, it just has no row once the published filter above is
-      // applied. Same "not found" result as before, just discovered one
-      // level deeper (inside the pinned connection instead of before it).
-      if (!gameRow) return null;
+  return db.withRow<GameRow, Game>(
+    `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug,
+            t.bio AS translator_bio, t.discord_url AS translator_discord,
+            t.avatar_url AS translator_avatar
+     FROM games g
+     LEFT JOIN translators t ON t.id = g.translator_id
+     WHERE g.slug = $1 AND g.published = TRUE
+     LIMIT 1`,
+    [slug],
+    async (client, gameRow) => {
       const game = gameRow as unknown as Game;
+
+      // The JOIN above returns flat `translator_name` / `translator_slug` /
+      // `translator_bio` / `translator_discord` / `translator_avatar`
+      // columns, but every consumer (games/[slug]/page.tsx) reads a nested
+      // `game.translator.{name,avatar_url,bio,discord_url}` object. Without
+      // this, `game.translator` is always undefined even when
+      // `translator_id` is set — the translator name/avatar never render,
+      // only the raw id sits unused on the row.
+      const row = gameRow as unknown as Record<string, unknown>;
+      if (game.translator_id && row.translator_name) {
+        game.translator = {
+          id: game.translator_id,
+          name: row.translator_name as string,
+          slug: row.translator_slug as string,
+          bio: (row.translator_bio as string) ?? undefined,
+          discord_url: (row.translator_discord as string) ?? undefined,
+          avatar_url: (row.translator_avatar as string) ?? undefined,
+        };
+      }
 
       const [genresRes, downloadsRes, bookmarkRes] = await Promise.all([
         client.query<{ id: number; name: string; slug: string }>(
@@ -176,13 +209,11 @@ export async function getGameBySlug(slug: string): Promise<Game | null> {
         client.query<{ count: string }>('SELECT COUNT(*) AS count FROM bookmarks WHERE game_id=$1', [game.id]),
       ]);
 
-      // View-count bump — now a cheap `await` on the same already-open
-      // connection rather than a separate fire-and-forget fanOut across
-      // every shard. Swallow errors so a counter hiccup never fails the
-      // page; if this one statement fails Postgres aborts the transaction,
-      // which just turns the COMMIT below into a no-op ROLLBACK — the
-      // genres/downloads/bookmarkCount we already captured above are plain
-      // JS values by that point, so the response is unaffected either way.
+      // View-count bump — a cheap `await` on the same already-open
+      // connection. Swallow errors so a counter hiccup never fails the
+      // page; the genres/downloads/bookmarkCount we already captured
+      // above are plain JS values by that point, so the response is
+      // unaffected either way.
       await client.query('UPDATE games SET view_count = view_count + 1 WHERE id = $1', [game.id]).catch(() => {});
 
       return {
@@ -191,11 +222,8 @@ export async function getGameBySlug(slug: string): Promise<Game | null> {
         downloads: downloadsRes.rows,
         bookmark_count: Number(bookmarkRes.rows[0]?.count ?? 0),
       } as unknown as Game;
-    });
-  } catch (e) {
-    if (e instanceof RowNotFoundError) return null;
-    throw e;
-  }
+    }
+  );
 }
 
 /** Is `userId` currently bookmarking this game? Viewer-specific — never cached. */

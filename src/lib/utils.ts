@@ -47,10 +47,10 @@ export function formatDate(dateStr: string): string {
 
 export function statusLabel(s: GameStatus): string {
   const map: Record<GameStatus, string> = {
-    completed: 'Hoàn Thành',
-    in_progress: 'Đang Dịch',
-    paused: 'Tạm Ngưng',
-    demo: 'Demo',
+    completed: 'Việt Hoá',
+    in_progress: 'Tiếng Nhật',
+    paused: 'Tiếng Trung',
+    demo: 'Tiếng Anh',
   };
   return map[s] ?? s;
 }

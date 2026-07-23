@@ -53,7 +53,7 @@ const FormField = forwardRef<HTMLInputElement, FormFieldProps>(function FormFiel
           required={required}
           aria-invalid={!!error}
           aria-describedby={describedBy}
-          className={['input-base', trailing ? 'pr-10' : '', className].filter(Boolean).join(' ')}
+          className={['input-base', trailing ? 'has-trailing' : '', className].filter(Boolean).join(' ')}
           {...rest}
         />
         {trailing && (

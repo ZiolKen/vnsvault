@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 import GameCard from '@/components/games/GameCard';
 import { formatNumber } from '@/lib/utils';
 
-import { getHotGames, getFeaturedGames, getSiteStats } from '@/lib/queries';
+import { getHotGames, getFeaturedGames, getNewGames, getSiteStats } from '@/lib/queries';
 
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
 
@@ -18,19 +18,20 @@ export const revalidate = 300;
 
 async function getData() {
   try {
-    const [hotGames, featuredGames, siteStats] = await Promise.all([
+    const [hotGames, featuredGames, newGames, siteStats] = await Promise.all([
       getHotGames(8),
       getFeaturedGames(4),
+      getNewGames(8),
       getSiteStats(),
     ]);
-    return { hotGames, featuredGames, siteStats };
+    return { hotGames, featuredGames, newGames, siteStats };
   } catch {
-    return { hotGames: [], featuredGames: [], siteStats: { totalGames: 0, totalDownloads: 0 } };
+    return { hotGames: [], featuredGames: [], newGames: [], siteStats: { totalGames: 0, totalDownloads: 0 } };
   }
 }
 
 export default async function HomePage() {
-  const { hotGames, featuredGames, siteStats } = await getData();
+  const { hotGames, featuredGames, newGames, siteStats } = await getData();
   const hero = featuredGames[0] ?? hotGames[0];
 
   const stats = [
@@ -205,8 +206,36 @@ export default async function HomePage() {
           </section>
         )}
 
+        {/* ── New Arrivals ────────────────────────────────── */}
+        {newGames.length > 0 && (
+          <section className="max-w-7xl mx-auto px-4 pb-14 sm:pb-16 w-full" aria-labelledby="new-heading">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <div className="flex items-center gap-2 mb-1" aria-hidden="true">
+                  <span className="w-5 h-px bg-copper" />
+                  <span className="text-xs uppercase tracking-widest text-copper-light font-semibold">Mới Cập Nhật</span>
+                </div>
+                <h2 id="new-heading" className="font-heading text-xl sm:text-2xl font-bold text-ghost">Mới Thêm Vào Kho</h2>
+              </div>
+              <Link href="/games?sort=created_at" className="text-sm text-ghost-dim hover:text-copper-light transition-colors">
+                Xem tất cả →
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+              {newGames.map((g, i) => (
+                <GameCard
+                  key={g.id}
+                  game={g}
+                  className="stagger-child"
+                  style={{ '--stagger-index': i } as CSSProperties}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── Empty state ─────────────────────────────────── */}
-        {hotGames.length === 0 && featuredGames.length === 0 && (
+        {hotGames.length === 0 && featuredGames.length === 0 && newGames.length === 0 && (
           <section className="max-w-7xl mx-auto px-4 py-24 text-center" aria-labelledby="empty-heading">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-copper/10 mb-6" aria-hidden="true">
               <Image src="/logo.png" alt="" width={40} height={40} className="opacity-60" />

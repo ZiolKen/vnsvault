@@ -70,8 +70,19 @@ export async function GET(req: NextRequest) {
     // which is exactly what produced the "game duplicated across page
     // boundaries" bug (never within a single page/request, only across
     // two of them, matching how this was reported).
+    // Explicit column list instead of `g.*` — GameCard doesn't render
+    // description/banner_url/translator_note, so there's no reason to pull
+    // those (description especially can be several KB of text) for every
+    // matching row across every shard just to sort+slice down to a page of
+    // 12-24 cards. `description` is still filterable via WHERE ... ILIKE
+    // above without being SELECTed. The detail page (getGameBySlug) does
+    // its own `SELECT *` for the full row, description included.
     const allMatches = await db.fanOut<Game>(
-      `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug
+      `SELECT g.id, g.title, g.slug, g.cover_url, g.developer, g.engine,
+              g.status, g.age_rating, g.translator_id, g.view_count,
+              g.download_count, g.bookmark_count, g.is_featured,
+              g.published, g.created_at, g.updated_at,
+              t.name AS translator_name, t.slug AS translator_slug
        FROM games g
        LEFT JOIN translators t ON t.id = g.translator_id
        ${where}

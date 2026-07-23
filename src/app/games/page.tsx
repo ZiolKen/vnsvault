@@ -9,10 +9,10 @@ import type { Game } from '@/types';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Tất cả' },
-  { value: 'completed', label: '✓ Việt Hoá' },
-  { value: 'in_progress', label: '⟳ Tiếng Nhật' },
-  { value: 'paused', label: '⏸ Tiếng Trung' },
-  { value: 'demo', label: '◈ Tiếng Anh' },
+  { value: 'completed', label: 'Việt Hoá' },
+  { value: 'in_progress', label: 'Tiếng Nhật' },
+  { value: 'paused', label: 'Tiếng Trung' },
+  { value: 'demo', label: 'Tiếng Anh' },
 ];
 const ENGINE_OPTIONS = [
   { value: '', label: 'Tất cả' },

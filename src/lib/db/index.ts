@@ -12,7 +12,7 @@ import { getRedis, SHARD_WRITE_TARGET_KEY } from '@/lib/redis';
 //     shard crosses MAX_SHARD_BYTES, new rows start landing on the next
 //     shard. Existing rows are never moved between shards. The actual
 //     `pg_database_size()` check no longer runs on the request path — an
-//     external scheduler (cron-job.org, every 5 min — see README's
+//     external scheduler (cron-job.org, every 15 min — see README's
 //     Write-Shard Pointer section for why it's external instead of
 //     Vercel's own `crons`) hits `/api/internal/shard-check`,
 //     checks every shard's size ONCE, and writes the chosen shard index to
@@ -471,9 +471,13 @@ class ShardedDb {
    *     `SELECT 1` probe and then a second, separate full SELECT once the
    *     owning shard is known.
    *  2. No BEGIN/COMMIT — those add two more sequential round trips that
-   *     only matter for atomicity/rollback, which a read (plus a
-   *     best-effort counter bump `fn` already swallows errors for) never
-   *     needed in the first place.
+   *     only matter for atomicity/rollback, which a pure read never needed
+   *     in the first place. (An earlier version of this comment justified
+   *     this via a best-effort counter bump living inside `fn` — that bump
+   *     moved out to a standalone `bumpGameViewCount()` call in
+   *     queries.ts, specifically so the read here could be cached without
+   *     the cache silently swallowing the write. The no-BEGIN/COMMIT
+   *     reasoning stands on its own either way.)
    *
    * Returns null if no shard has a matching row (same "not found" case
    * withRowTransaction signals via RowNotFoundError, just without the

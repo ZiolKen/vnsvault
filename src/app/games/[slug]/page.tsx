@@ -12,7 +12,7 @@ import DownloadButton from '@/components/games/DownloadButton';
 import BookmarkButton from '@/components/games/BookmarkButton';
 import ReportLinkButton from '@/components/games/ReportLinkButton';
 import DetailTabs from '@/components/games/DetailTabs';
-import { getGameBySlug, isBookmarkedByUser } from '@/lib/queries';
+import { getGameBySlug, isBookmarkedByUser, bumpGameViewCount } from '@/lib/queries';
 import { getSession } from '@/lib/jwt';
 
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
@@ -54,7 +54,15 @@ export default async function GameDetailPage({ params }: Props) {
   if (!game) notFound();
 
   const loggedIn = Boolean(session);
-  const userBookmarked = loggedIn ? await isBookmarkedByUser(game.id, session!.userId) : false;
+  // Runs alongside the bookmark check below rather than after it — both are
+  // awaited together so the view-count write can't add its own sequential
+  // latency to the page, while still completing before the function
+  // returns (an un-awaited promise here could get cut off once the
+  // response is sent).
+  const [userBookmarked] = await Promise.all([
+    loggedIn ? isBookmarkedByUser(game.id, session!.userId) : Promise.resolve(false),
+    bumpGameViewCount(game.id),
+  ]);
 
   // SECURITY: the real download URL is never sent to the browser anymore,
   // logged in or not — DownloadButton only needs `id` now, and links to

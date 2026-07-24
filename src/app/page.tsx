@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 import GameCard from '@/components/games/GameCard';
 import { formatNumber } from '@/lib/utils';
 
-import { getHotGames, getFeaturedGames, getNewGames, getSiteStats } from '@/lib/queries';
+import { getHomepageIndex } from '@/lib/queries';
 
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
 
@@ -13,20 +13,22 @@ export const metadata: Metadata = {
   alternates: { canonical: BASE },
 };
 
-// Revalidate page every 5 minutes (ISR)
+// Revalidate page every 5 minutes (ISR) — matches the cron-job.org cadence
+// that refreshes /api/internal/reindex's Redis bundle, so this page
+// virtually never pays for a live DB fan-out: on a cold ISR regen it reads
+// the pre-computed index (one Redis GET) instead of re-running
+// getHotGames/getFeaturedGames/getNewGames/getSiteStats itself.
 export const revalidate = 300;
 
 async function getData() {
   try {
-    const [hotGames, featuredGames, newGames, siteStats] = await Promise.all([
-      getHotGames(8),
-      getFeaturedGames(4),
-      getNewGames(8),
-      getSiteStats(),
-    ]);
-    return { hotGames, featuredGames, newGames, siteStats };
+    return await getHomepageIndex();
   } catch {
-    return { hotGames: [], featuredGames: [], newGames: [], siteStats: { totalGames: 0, totalDownloads: 0 } };
+    return {
+      hotGames: [], featuredGames: [], newGames: [],
+      siteStats: { totalGames: 0, totalDownloads: 0 },
+      generatedAt: new Date().toISOString(),
+    };
   }
 }
 

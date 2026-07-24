@@ -70,13 +70,13 @@ Việc chọn shard nào để WRITE cần biết dung lượng hiện tại c�
 nối. Kiến trúc hiện tại:
 
 ```
-cron-job.org (external, mỗi 5 phút)
+cron-job.org (external, mỗi 15 phút)
         │  GET + header "Authorization: Bearer $CRON_SECRET"
         ▼
 GET /api/internal/shard-check   ← nơi DUY NHẤT còn gọi pg_database_size()
         │  chạy sweep 1 lần trên mọi shard
         ▼
-Redis: SET shard:write-target=<index>   (TTL 15 phút)
+Redis: SET shard:write-target=<index>   (TTL 45 phút)
         │
         ▼
 pickWriteShardIndex() trong db/index.ts
@@ -109,7 +109,7 @@ tự tắt sau 60 ngày repo không có commit — im lặng, dễ bỏ sót.
 2. Tạo cronjob mới:
    - **URL**: `https://<domain-production-của-bạn>/api/internal/shard-check`
    - **Method**: GET
-   - **Schedule**: mỗi 5 phút (`minutes: 0,5,10,...`)
+   - **Schedule**: mỗi 15 phút (`minutes: 0,15,30,45`)
    - **Custom header**: `Authorization` → `Bearer <giá-trị-CRON_SECRET>` (cùng giá trị đã set trong Vercel env vars)
 3. Set `CRON_SECRET` trong Vercel env vars trước (xem mục Environment Variables) — cron-job.org KHÔNG tự biết giá trị này, phải copy tay
 4. Lưu, kiểm tra tab "History" trên cron-job.org để xác nhận nhận được `200 { "success": true, "writeTarget": N }`
@@ -354,7 +354,7 @@ scripts/
 
 ### Lưu ý khi deploy
 
-- **Shard-check cron** (`/api/internal/shard-check`) được trigger bởi **cron-job.org** (external, mỗi 5 phút) chứ không phải `crons` trong `vercel.json` — Vercel Hobby chỉ cho cron của chính Vercel chạy tối đa 1 lần/ngày, xem [Write-Shard Pointer](#write-shard-pointer-redis--cron) ở trên để biết lý do và cách setup
+- **Shard-check cron** (`/api/internal/shard-check`) được trigger bởi **cron-job.org** (external, mỗi 15 phút) chứ không phải `crons` trong `vercel.json` — Vercel Hobby chỉ cho cron của chính Vercel chạy tối đa 1 lần/ngày, xem [Write-Shard Pointer](#write-shard-pointer-redis--cron) ở trên để biết lý do và cách setup
 - Set `CRON_SECRET` trong Vercel env vars **trước** khi tạo job trên cron-job.org, rồi copy đúng giá trị đó vào custom header `Authorization: Bearer ...` của job — 2 bên không tự đồng bộ, quên set thì route bỏ qua xác thực (không an toàn cho production)
 
 ---

@@ -12,6 +12,7 @@
  */
 
 import { db } from '@/lib/db';
+import { cached, getRedis, SHORT_CACHE_TTL_SECONDS, HOMEPAGE_INDEX_KEY } from '@/lib/redis';
 import type { Game } from '@/types';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -80,17 +81,65 @@ export async function getSiteStats(): Promise<{ totalGames: number; totalDownloa
   return { totalGames, totalDownloads };
 }
 
+export interface HomepageIndex {
+  hotGames: Game[];
+  featuredGames: Game[];
+  newGames: Game[];
+  siteStats: { totalGames: number; totalDownloads: number };
+  generatedAt: string;
+}
+
+/**
+ * Read-mostly entry point for the homepage. Tries the pre-computed bundle
+ * written by `/api/internal/reindex` first (one Redis GET — no fan-out, no
+ * JOIN, no JS sort at all on the request path); only falls back to the
+ * live 4-query path below if the index hasn't been built yet or Redis is
+ * unavailable/stale. Because getHotGames/getNewGames/getFeaturedGames now
+ * push LIMIT down per shard (see their comments), even this fallback no
+ * longer sorts the whole catalog — it's just slower than the Redis hit,
+ * never "wrong" or unbounded.
+ */
+export async function getHomepageIndex(): Promise<HomepageIndex> {
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const hit = await redis.get<HomepageIndex>(HOMEPAGE_INDEX_KEY);
+      if (hit) return hit;
+    } catch (e) {
+      console.error(`[getHomepageIndex] Redis GET ${HOMEPAGE_INDEX_KEY} failed, falling back to live query:`, e);
+    }
+  }
+
+  const [hotGames, featuredGames, newGames, siteStats] = await Promise.all([
+    getHotGames(8),
+    getFeaturedGames(4),
+    getNewGames(8),
+    getSiteStats(),
+  ]);
+  return { hotGames, featuredGames, newGames, siteStats, generatedAt: new Date().toISOString() };
+}
+
 /**
  * Get the most-downloaded published games.
  * Used by the landing page "Game Hot" section.
  */
 export async function getHotGames(limit = 8): Promise<Game[]> {
+  // LIMIT pushed down per shard (not just capped at the end): to correctly
+  // produce the global top-N of a merge of per-shard sorted lists, the top
+  // N from EACH shard is provably enough — a shard could in the worst case
+  // hold all N of the final result. Previously this pulled every published
+  // row (full row + JOIN) from every shard with no LIMIT at all and sorted
+  // the WHOLE catalog in JS on every call; this bounds both the bytes
+  // pulled and the JS sort to (shard count) × limit regardless of how many
+  // games are published — same technique as /api/games's pagination.
   const rows = await db.fanOut<GameRow>(
     `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug
      FROM games g
      LEFT JOIN translators t ON t.id = g.translator_id
      WHERE g.published = TRUE
-     ORDER BY g.download_count DESC`
+     ORDER BY g.download_count DESC, g.id ASC
+     LIMIT $1`,
+    [limit]
   );
   // fanOut merges all shards — sort+slice in app to get globally top-N
   rows.sort((a, b) => Number(b.download_count) - Number(a.download_count));
@@ -103,12 +152,15 @@ export async function getHotGames(limit = 8): Promise<Game[]> {
  * Used by the landing page "Mới Thêm" section.
  */
 export async function getNewGames(limit = 8): Promise<Game[]> {
+  // Same per-shard LIMIT pushdown as getHotGames — see comment there.
   const rows = await db.fanOut<GameRow>(
     `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug
      FROM games g
      LEFT JOIN translators t ON t.id = g.translator_id
      WHERE g.published = TRUE
-     ORDER BY g.created_at DESC`
+     ORDER BY g.created_at DESC, g.id ASC
+     LIMIT $1`,
+    [limit]
   );
   rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   const top = rows.slice(0, limit) as unknown as Game[];
@@ -120,12 +172,15 @@ export async function getNewGames(limit = 8): Promise<Game[]> {
  * Used by the landing page "Được Chọn Lọc" section.
  */
 export async function getFeaturedGames(limit = 4): Promise<Game[]> {
+  // Same per-shard LIMIT pushdown as getHotGames — see comment there.
   const rows = await db.fanOut<GameRow>(
     `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug
      FROM games g
      LEFT JOIN translators t ON t.id = g.translator_id
      WHERE g.published = TRUE AND g.is_featured = TRUE
-     ORDER BY g.updated_at DESC`
+     ORDER BY g.updated_at DESC, g.id ASC
+     LIMIT $1`,
+    [limit]
   );
   rows.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   const top = rows.slice(0, limit) as unknown as Game[];
@@ -162,68 +217,90 @@ export async function getFeaturedGames(limit = 4): Promise<Game[]> {
  * the expensive part, and versus the previous single-shard version, two
  * fewer sequential round trips (no probe, no BEGIN/COMMIT).
  */
+/**
+ * Pure read, cached for SHORT_CACHE_TTL_SECONDS: game row + translator +
+ * genres + downloads + bookmark count, all of which are identical for
+ * every visitor. Deliberately does NOT touch view_count — see
+ * `bumpGameViewCount` below for why that has to stay outside the cache.
+ */
 export async function getGameBySlug(slug: string): Promise<Game | null> {
-  return db.withRow<GameRow, Game>(
-    `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug,
-            t.bio AS translator_bio, t.discord_url AS translator_discord,
-            t.avatar_url AS translator_avatar
-     FROM games g
-     LEFT JOIN translators t ON t.id = g.translator_id
-     WHERE g.slug = $1 AND g.published = TRUE
-     LIMIT 1`,
-    [slug],
-    async (client, gameRow) => {
-      const game = gameRow as unknown as Game;
+  return cached(`game:slug:${slug}`, SHORT_CACHE_TTL_SECONDS, () =>
+    db.withRow<GameRow, Game>(
+      `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug,
+              t.bio AS translator_bio, t.discord_url AS translator_discord,
+              t.avatar_url AS translator_avatar
+       FROM games g
+       LEFT JOIN translators t ON t.id = g.translator_id
+       WHERE g.slug = $1 AND g.published = TRUE
+       LIMIT 1`,
+      [slug],
+      async (client, gameRow) => {
+        const game = gameRow as unknown as Game;
 
-      // The JOIN above returns flat `translator_name` / `translator_slug` /
-      // `translator_bio` / `translator_discord` / `translator_avatar`
-      // columns, but every consumer (games/[slug]/page.tsx) reads a nested
-      // `game.translator.{name,avatar_url,bio,discord_url}` object. Without
-      // this, `game.translator` is always undefined even when
-      // `translator_id` is set — the translator name/avatar never render,
-      // only the raw id sits unused on the row.
-      const row = gameRow as unknown as Record<string, unknown>;
-      if (game.translator_id && row.translator_name) {
-        game.translator = {
-          id: game.translator_id,
-          name: row.translator_name as string,
-          slug: row.translator_slug as string,
-          bio: (row.translator_bio as string) ?? undefined,
-          discord_url: (row.translator_discord as string) ?? undefined,
-          avatar_url: (row.translator_avatar as string) ?? undefined,
-        };
+        // The JOIN above returns flat `translator_name` / `translator_slug` /
+        // `translator_bio` / `translator_discord` / `translator_avatar`
+        // columns, but every consumer (games/[slug]/page.tsx) reads a nested
+        // `game.translator.{name,avatar_url,bio,discord_url}` object. Without
+        // this, `game.translator` is always undefined even when
+        // `translator_id` is set — the translator name/avatar never render,
+        // only the raw id sits unused on the row.
+        const row = gameRow as unknown as Record<string, unknown>;
+        if (game.translator_id && row.translator_name) {
+          game.translator = {
+            id: game.translator_id,
+            name: row.translator_name as string,
+            slug: row.translator_slug as string,
+            bio: (row.translator_bio as string) ?? undefined,
+            discord_url: (row.translator_discord as string) ?? undefined,
+            avatar_url: (row.translator_avatar as string) ?? undefined,
+          };
+        }
+
+        const [genresRes, downloadsRes, bookmarkRes] = await Promise.all([
+          client.query<{ id: number; name: string; slug: string }>(
+            `SELECT gn.id, gn.name, gn.slug
+             FROM game_genres gg JOIN genres gn ON gn.id = gg.genre_id
+             WHERE gg.game_id = $1`,
+            [game.id]
+          ),
+          client.query(
+            `SELECT id, version, platform, url, label, created_at
+             FROM game_downloads WHERE game_id = $1 ORDER BY created_at DESC`,
+            [game.id]
+          ),
+          client.query<{ count: string }>('SELECT COUNT(*) AS count FROM bookmarks WHERE game_id=$1', [game.id]),
+        ]);
+
+        return {
+          ...game,
+          genres: genresRes.rows,
+          downloads: downloadsRes.rows,
+          bookmark_count: Number(bookmarkRes.rows[0]?.count ?? 0),
+        } as unknown as Game;
       }
-
-      const [genresRes, downloadsRes, bookmarkRes] = await Promise.all([
-        client.query<{ id: number; name: string; slug: string }>(
-          `SELECT gn.id, gn.name, gn.slug
-           FROM game_genres gg JOIN genres gn ON gn.id = gg.genre_id
-           WHERE gg.game_id = $1`,
-          [game.id]
-        ),
-        client.query(
-          `SELECT id, version, platform, url, label, created_at
-           FROM game_downloads WHERE game_id = $1 ORDER BY created_at DESC`,
-          [game.id]
-        ),
-        client.query<{ count: string }>('SELECT COUNT(*) AS count FROM bookmarks WHERE game_id=$1', [game.id]),
-      ]);
-
-      // View-count bump — a cheap `await` on the same already-open
-      // connection. Swallow errors so a counter hiccup never fails the
-      // page; the genres/downloads/bookmarkCount we already captured
-      // above are plain JS values by that point, so the response is
-      // unaffected either way.
-      await client.query('UPDATE games SET view_count = view_count + 1 WHERE id = $1', [game.id]).catch(() => {});
-
-      return {
-        ...game,
-        genres: genresRes.rows,
-        downloads: downloadsRes.rows,
-        bookmark_count: Number(bookmarkRes.rows[0]?.count ?? 0),
-      } as unknown as Game;
-    }
+    )
   );
+}
+
+/**
+ * View-count bump — deliberately kept OUTSIDE getGameBySlug's cache. If it
+ * lived inside the cached read, every visitor sharing a cache hit within
+ * the TTL window would silently stop incrementing the counter (only the
+ * one request that actually missed the cache and hit the DB would count),
+ * undercounting real views by roughly the cache hit rate.
+ *
+ * Called once per real page view instead, on every request regardless of
+ * cache state. We no longer have the single already-open shard connection
+ * `getGameBySlug` used to reuse for this (that connection only exists on a
+ * cache miss now) — fanOut is the documented pattern in db/index.ts for
+ * "UPDATE/DELETE by id: only the shard holding that row is affected, the
+ * rest are harmless no-ops", so this hits every shard but only the one
+ * actually holding `gameId` does real work. fanOut already logs and
+ * excludes failing shards rather than throwing, so a counter hiccup here
+ * can't fail the page — no extra try/catch needed.
+ */
+export async function bumpGameViewCount(gameId: string): Promise<void> {
+  await db.fanOut('UPDATE games SET view_count = view_count + 1 WHERE id = $1', [gameId]);
 }
 
 /** Is `userId` currently bookmarking this game? Viewer-specific — never cached. */

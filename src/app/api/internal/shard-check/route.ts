@@ -2,11 +2,13 @@
  * GET /api/internal/shard-check
  *
  * The ONLY place in the app that still calls `pg_database_size()` on every
- * shard. Triggered every 5 minutes by an external scheduler (cron-job.org
- * — see README's "Write-Shard Pointer" section for the exact job config),
+ * shard. Triggered every 15 minutes by an external scheduler (cron-job.org
+ * — see README's "Write-Shard Pointer" section for the exact job config;
+ * ⚠ this was 5 minutes — if you're seeing 4x more invocations than
+ * expected, the cron-job.org dashboard job wasn't updated to match),
  * NOT by Vercel's own `crons` in vercel.json: this project is on Vercel's
  * Hobby plan, which hard-fails *deployment* for any cron expression firing
- * more than once a day, so a native 5-minute Vercel Cron isn't available
+ * more than once a day, so a native cron at this cadence isn't available
  * without Pro. An external HTTP call authenticates and behaves identically
  * either way — see the CRON_SECRET check below.
  *

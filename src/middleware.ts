@@ -1,5 +1,8 @@
 /**
- * Edge Middleware — only imports from jwt.ts (Edge-safe, no bcryptjs).
+ * Edge Middleware — everything it imports has to be Edge-safe: jwt.ts
+ * (Edge-safe, no bcryptjs) and rateLimit.ts, which now also pulls in
+ * redis.ts's Upstash client — that client is fetch-based (REST API, no
+ * TCP), so it works from here the same way it works from Node routes.
  *
  * Responsibilities:
  *  1. Block requests to well-known probe/scanner paths before they reach
@@ -152,7 +155,7 @@ export async function middleware(req: NextRequest) {
     const limitRule = API_RATE_LIMITS.find(rule => pathname.startsWith(rule.prefix));
     if (limitRule) {
       const ip = getClientIp(req.headers);
-      const { success, retryAfterSeconds } = rateLimit(`${limitRule.prefix}:${ip}`, {
+      const { success, retryAfterSeconds } = await rateLimit(`${limitRule.prefix}:${ip}`, {
         windowMs: limitRule.windowMs,
         max: limitRule.max,
       });

@@ -1,16 +1,27 @@
 /**
- * In-memory rate limiter for the Edge middleware.
+ * Rate limiter for the Edge middleware — Redis-backed (shared across every
+ * instance) with an in-memory fallback for when Redis is unset or
+ * unreachable.
  *
- * CAVEAT (Vercel serverless/edge): this Map lives inside a single running
- * instance. On Edge it's usually one warm instance per region so this
- * catches real abuse reasonably well; on Node functions, traffic spread
- * across multiple concurrent instances means each instance counts
- * independently — a determined attacker distributed across instances can
- * exceed the nominal limit by roughly (instance count)×. This is a
- * best-effort first line of defense, not a hard guarantee; for a hard
- * guarantee, back this with Vercel KV/Upstash Redis (INCR + EXPIRE) so all
- * instances share one counter.
+ * Uses the same Upstash Redis client as the shard-write pointer (see
+ * redis.ts) — it's fetch-based, so it works from Edge middleware the same
+ * way it works from Node routes. INCR + conditional EXPIRE isn't perfectly
+ * atomic (a request could theoretically read the post-INCR count before
+ * the EXPIRE lands), but the only failure mode for a rate limiter is a
+ * window very occasionally ending up ~1 request wider than configured —
+ * a non-issue compared to what it replaces: on Vercel Node functions,
+ * traffic spread across concurrent instances each counting independently
+ * meant a determined attacker distributed across instances could exceed
+ * the nominal limit by roughly (instance count)×. A shared Redis counter
+ * closes that gap.
+ *
+ * Falls back to the original in-memory Map (below) whenever Redis is
+ * unset or a call to it fails — same fail-soft contract as every other
+ * Redis path in this codebase: degrade to "works, just per-instance"
+ * rather than break rate limiting entirely.
  */
+
+import { getRedis } from './redis';
 
 type Bucket = { count: number; resetAt: number };
 
@@ -43,13 +54,9 @@ export interface RateLimitOptions {
   max?: number;
 }
 
-/**
- * Fixed-window rate limit keyed by an arbitrary string (typically
- * `${route}:${ip}`). Call once per incoming request.
- */
-export function rateLimit(key: string, options: RateLimitOptions = {}): RateLimitResult {
-  const windowMs = options.windowMs ?? 60_000;
-  const max = options.max ?? 60;
+/** Original fixed-window in-memory limiter — used directly when Redis is
+ * unset, and as the fallback when a Redis call errors. */
+function rateLimitInMemory(key: string, windowMs: number, max: number): RateLimitResult {
   const now = Date.now();
 
   const bucket = buckets.get(key);
@@ -65,6 +72,40 @@ export function rateLimit(key: string, options: RateLimitOptions = {}): RateLimi
 
   bucket.count += 1;
   return { success: true, remaining: max - bucket.count };
+}
+
+/**
+ * Fixed-window rate limit keyed by an arbitrary string (typically
+ * `${route}:${ip}`). Call once per incoming request.
+ */
+export async function rateLimit(key: string, options: RateLimitOptions = {}): Promise<RateLimitResult> {
+  const windowMs = options.windowMs ?? 60_000;
+  const max = options.max ?? 60;
+
+  const redis = getRedis();
+  if (!redis) return rateLimitInMemory(key, windowMs, max);
+
+  const windowSeconds = Math.ceil(windowMs / 1000);
+  const redisKey = `ratelimit:${key}`;
+
+  try {
+    const count = await redis.incr(redisKey);
+    if (count === 1) {
+      // Only the request that just created the key sets its expiry — every
+      // later request in the same window just increments.
+      await redis.expire(redisKey, windowSeconds);
+    }
+
+    if (count > max) {
+      const ttl = await redis.ttl(redisKey);
+      return { success: false, remaining: 0, retryAfterSeconds: ttl > 0 ? ttl : windowSeconds };
+    }
+
+    return { success: true, remaining: max - count };
+  } catch (e) {
+    console.error(`[rateLimit] Redis error for "${key}", falling back to in-memory for this request:`, e);
+    return rateLimitInMemory(key, windowMs, max);
+  }
 }
 
 /**

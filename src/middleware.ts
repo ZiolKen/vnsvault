@@ -78,6 +78,8 @@ const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const API_RATE_LIMITS: { prefix: string; windowMs: number; max: number }[] = [
   { prefix: '/api/auth/login', windowMs: 60_000, max: 10 },
   { prefix: '/api/auth/register', windowMs: 60_000, max: 5 },
+  { prefix: '/api/auth/forgot-password', windowMs: 60_000, max: 4 },
+  { prefix: '/api/auth/reset-password', windowMs: 60_000, max: 10 },
   // Tighter than the generic /api rule: each request here carries a
   // multipart file body and writes to Supabase Storage — worth a lower
   // ceiling than plain JSON API calls even though the caller is already

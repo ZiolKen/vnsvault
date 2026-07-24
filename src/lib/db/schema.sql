@@ -27,6 +27,13 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_permanent  BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_expires_at TIMESTAMPTZ;
 
+-- Password reset (forgot-password flow) — token stored HASHED, never raw.
+-- See migrations/003_password_reset.sql for the standalone migration and the
+-- rationale for keeping these inline on `users` (co-locates with the user row
+-- on whichever shard holds it, like vip_permanent/vip_expires_at above).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_hash       TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMPTZ;
+
 -- Translators / Translation groups
 CREATE TABLE IF NOT EXISTS translators (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -337,6 +344,8 @@ CREATE INDEX IF NOT EXISTS idx_link_reports_status ON link_reports(status) WHERE
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user      ON bookmarks(user_id);
 CREATE INDEX IF NOT EXISTS idx_bookmarks_game       ON bookmarks(game_id);
 CREATE INDEX IF NOT EXISTS idx_request_votes_user   ON request_votes(user_id);
+-- Partial index: only rows with a live reset request are indexed (tiny).
+CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token_hash) WHERE reset_token_hash IS NOT NULL;
 
 -- Trigger: auto update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at()

@@ -111,6 +111,12 @@ function LoginForm() {
               }
             />
 
+            <div className="flex justify-end -mt-1">
+              <Link href="/forgot-password" className="text-xs text-copper-light hover:underline underline-offset-2">
+                Quên mật khẩu?
+              </Link>
+            </div>
+
             {/* Turnstile */}
             <TurnstileWidget
               onToken={setTsToken}

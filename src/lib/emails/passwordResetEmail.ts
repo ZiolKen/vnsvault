@@ -153,7 +153,7 @@ export function passwordResetEmail(opts: PasswordResetEmailOptions): {
                 </tr>
                 <tr>
                   <td align="left" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:22px;color:#7a7a9a;">
-                    Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email — mật khẩu của bạn sẽ không thay đổi cho tới khi bạn mở liên kết trên và tạo mật khẩu mới.
+                    Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này — mật khẩu của bạn sẽ không thay đổi cho tới khi bạn mở liên kết trên và tạo mật khẩu mới.
                   </td>
                 </tr>
               </table>
@@ -162,7 +162,7 @@ export function passwordResetEmail(opts: PasswordResetEmailOptions): {
           <!-- Footer -->
           <tr>
             <td align="center" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:20px;color:#5a5a7a;padding:28px 16px 8px 16px;">
-              © ${year} VNSVault · Kho tàng Visual Novel Việt hóa<br />
+              © ${year} VNSVault · Kho tàng Visual Novel Việt Hóa<br />
               Email này được gửi tự động, vui lòng không trả lời.
             </td>
           </tr>
@@ -180,7 +180,7 @@ Mở liên kết sau để tạo mật khẩu mới (hết hạn sau ${expiresMi
 
 ${resetUrl}
 
-Nếu bạn không yêu cầu điều này, hãy bỏ qua email — mật khẩu của bạn sẽ không thay đổi.
+Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email — mật khẩu của bạn sẽ không thay đổi.
 
 — VNSVault`;
 

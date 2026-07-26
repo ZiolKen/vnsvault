@@ -85,7 +85,7 @@ export const HOMEPAGE_INDEX_KEY = 'idx:homepage';
 // getHotGames/getNewGames/getFeaturedGames) query. Keep in sync with
 // whatever interval the cron-job.org job is actually set to, same caveat
 // as SHARD_WRITE_TARGET_TTL_SECONDS above.
-export const HOMEPAGE_INDEX_TTL_SECONDS = 20 * 60;
+export const HOMEPAGE_INDEX_TTL_SECONDS = 30 * 60;
 
 let client: Redis | null | undefined;
 

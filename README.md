@@ -19,14 +19,16 @@ Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Supab
 - **Game detail** — ảnh bìa, mô tả, download links theo nền tảng + phiên bản, thông tin nhóm dịch
 - **Đề xuất game** — người dùng đề xuất và vote game muốn được dịch
 - **Báo cáo link hỏng** — report broken / sai download link trực tiếp từ trang game
-- **Tài khoản người dùng** — đăng ký / đăng nhập, đổi mật khẩu, bookmark game, chọn avatar
+- **Tài khoản người dùng** — đăng ký / đăng nhập, đổi mật khẩu, quên mật khẩu (đặt lại qua email), bookmark game, chọn avatar
 - **VIP** — tài khoản VIP (vĩnh viễn hoặc theo tháng, nâng cấp thủ công qua admin panel) tải game trực tiếp, bỏ qua bước "vượt link" quảng cáo (bbmkts.com) mà tài khoản thường phải đi qua
-- **Admin panel** — quản lý game (thêm / sửa / xoá / publish / featured), duyệt đề xuất, xử lý báo cáo link, quản lý VIP (nâng cấp / gia hạn / thu hồi), soạn **thông báo popup** hiển thị cho khách truy cập
+- **Admin panel** — quản lý game (thêm / sửa / xoá / publish / featured), duyệt đề xuất, xử lý báo cáo link, quản lý người dùng & VIP (nâng cấp / gia hạn / thu hồi tại `/admin/users`), bật/tắt **chế độ bảo trì**, soạn **thông báo popup** hiển thị cho khách truy cập
 - **Thông báo popup** — popup thông báo toàn site, nội dung/tiêu đề/thời gian "Đóng N giờ" chỉnh sửa đầy đủ từ Admin Dashboard (`/admin/announcement`), lưu server-side; lượt đóng của khách được nhớ ở **IndexedDB** phía client theo từng phiên bản nội dung — sửa nội dung sẽ tự hiện lại popup cho người đã từng đóng
-- **ISR** — homepage cache 5 phút, sitemap cache 1 giờ
+- **Chế độ bảo trì** — admin bật/tắt tại `/admin/maintenance`, chặn toàn bộ request công khai ở tầng middleware, session admin vẫn truy cập bình thường
+- **ISR + Redis homepage index** — homepage cache 5 phút; danh sách hot/featured/new games + site stats được build sẵn định kỳ và lưu vào Redis (`/api/internal/reindex`) thay vì tính lại mỗi lượt ghé — request thường chỉ đọc Redis, tự rơi về query trực tiếp nếu cache miss; sitemap cache 1 giờ
 - **SEO** — metadata, canonical URL, sitemap.xml, robots.txt tự động
 - **PWA** — web app manifest
-- **Bảo mật** — CSP, HSTS, Cloudflare Turnstile bot protection trên form đăng ký / đăng nhập
+- **Bảo mật** — CSP, HSTS, Cloudflare Turnstile bot protection trên form đăng ký / đăng nhập / quên mật khẩu
+- **Trang Điều khoản sử dụng** — `/terms`
 
 ---
 
@@ -42,7 +44,10 @@ Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Supab
 | Auth | JWT via `jose`, HttpOnly cookie, 7-day session |
 | Password | `bcryptjs` (cost factor 12) |
 | Bot protection | Cloudflare Turnstile |
-| Analytics | Vercel Analytics |
+| Cache / pointer store | Redis (Upstash qua Vercel Marketplace) |
+| Ảnh Upload | Supabase Storage |
+| Email | Resend (gọi trực tiếp REST API qua `fetch`, không dùng SDK) |
+| Analytics | Vercel Analytics + Speed Insights |
 | Deployment | Vercel |
 
 ---
@@ -119,6 +124,40 @@ tự tắt sau 60 ngày repo không có commit — im lặng, dễ bỏ sót.
 > `SHARD_WRITE_TARGET_TTL_SECONDS` trong `src/lib/redis.ts` cho khớp lịch
 > mới — 2 giá trị này là một cặp, không có gì tự đồng bộ giúp.
 
+### Homepage Index Cache (Redis)
+
+Không có `postgres_fdw`/`dblink` nào nối được các shard độc lập lại với
+nhau, nên Postgres không thể tự làm MATERIALIZED VIEW xuyên shard cho
+homepage. Thay vào đó:
+
+```
+cron-job.org (external, gợi ý mỗi 5 phút — khớp revalidate của trang chủ)
+        │  GET + header "Authorization: Bearer $CRON_SECRET"
+        ▼
+GET /api/internal/reindex
+        │  fanOut + JOIN + sort MỘT LẦN: hotGames, featuredGames, newGames, siteStats
+        ▼
+Redis: SET homepage:index=<json>   (TTL riêng, xem HOMEPAGE_INDEX_TTL_SECONDS)
+        │
+        ▼
+getHomepageIndex() trong lib/queries.ts
+  1. Redis GET homepage:index — có thì dùng luôn
+  2. Redis chưa cấu hình / miss / lỗi → fallback query trực tiếp
+     (fanOut LIMIT-bounded, giống hệt logic reindex nhưng chạy live)
+```
+
+Cùng `CRON_SECRET`, cùng kiểu fail-closed ở production như
+`shard-check` — có thể dùng chung 1 job cron-job.org khác trỏ tới route
+này, hoặc thêm job riêng.
+
+### Keep-Alive (chống Supabase free-tier tự pause)
+
+Supabase free tier tự **pause** project sau 7 ngày liên tục không có
+request tới database. `GET /api/internal/keep-alive` chạy `SELECT 1` trên
+**tất cả** shard (kể cả shard chưa có traffic thật) để giữ chúng "sống".
+Gợi ý lịch trên cron-job.org: mỗi 3 ngày, cùng `CRON_SECRET` với 2 route
+internal ở trên.
+
 ---
 
 ## Getting Started
@@ -150,6 +189,12 @@ cp .env.example .env.local
 ```bash
 npm run db:setup
 ```
+
+> `schema.sql` luôn ở trạng thái mới nhất — cài mới thì `db:setup` là đủ,
+> không cần chạy gì thêm. Thư mục `migrations/` chỉ dành cho **deployment
+> đã chạy production từ trước**, cần áp thủ công từng file trên từng shard
+> (SQL Editor của Supabase, hoặc `psql <url> -f migrations/00X_....sql`)
+> để bắt kịp các thay đổi schema đã có sẵn trong `schema.sql` bản mới.
 
 ### 4. Tạo tài khoản admin đầu tiên
 
@@ -252,6 +297,21 @@ bình thường qua tab URL (không có gì hỏng, upload chỉ là tuỳ chọ
 Giới hạn: JPEG/PNG/WebP/GIF, tối đa 4MB/ảnh — xem `MAX_UPLOAD_BYTES` trong
 `src/lib/storage.ts` nếu muốn đổi.
 
+### Email (Resend — quên mật khẩu)
+
+Dùng để gửi email đặt lại mật khẩu (`/forgot-password` → `/reset-password`).
+Gọi thẳng REST API của Resend qua `fetch` (xem `src/lib/email.ts`), không
+dùng package `resend` nên không tốn thêm dependency.
+
+1. Lấy API key tại **[resend.com](https://resend.com) → API Keys**.
+2. Verify domain người gửi trong **Resend → Domains** trước khi gửi được
+   tới email thật — gửi từ domain chưa verify sẽ bị Resend từ chối.
+
+| Variable | Required? | Description |
+|---|---|---|
+| `RESEND_API_KEY` | Nên set ở production | API key của Resend. Không set thì `/api/auth/forgot-password` vẫn trả về thành công (tránh lộ email nào đã đăng ký) nhưng **không gửi được email nào**, chỉ log lỗi |
+| `RESEND_FROM_EMAIL` | Không, có fallback hard-code | Địa chỉ người gửi, dạng `"Tên <email@domain-đã-verify>"` |
+
 ### Chế Độ Bảo Trì (Maintenance Mode)
 
 Bật/tắt tại **`/admin/maintenance`**. Cờ lưu ở Redis (KHÔNG phải DB — middleware
@@ -278,8 +338,10 @@ npm run lint:check   # Chỉ kiểm tra lint
 npm run type-check   # TypeScript type check
 npm run analyze      # Build kèm bundle analyzer (ANALYZE=true)
 
-npm run db:setup     # Áp dụng schema.sql lên tất cả shards
-npm run db:reset     # ⚠️ XOÁ TRẮNG tất cả shards (không thể hoàn tác)
+npm run db:setup         # Áp dụng schema.sql lên tất cả shards
+npm run db:reset         # ⚠️ XOÁ TRẮNG tất cả shards (không thể hoàn tác)
+npm run db:check-genres  # Kiểm tra bảng genres có đồng bộ (cùng id) trên mọi shard không
+npm run db:fix-genre-ids # Sửa lệch id genres giữa các shard (dùng sau khi db:check-genres báo lỗi)
 npm run create-admin # Tạo / promote tài khoản admin đầu tiên
 npm run list-users
 npm run delete-user
@@ -293,55 +355,77 @@ npm run remove-admin
 ```
 src/
 ├── app/
-│   ├── page.tsx              # Homepage (ISR, revalidate 5m)
-│   ├── games/                # Thư viện + game detail
-│   ├── requests/             # Đề xuất game
-│   ├── donate/               # Trang ủng hộ
-│   ├── login/ register/      # Auth pages
-│   ├── myaccount/            # Trang cá nhân
-│   ├── admin/                # Admin panel (protected)
-│   └── api/                  # Route handlers
-│       ├── auth/             # login, logout, register, me
-│       ├── games/            # public game API
-│       ├── admin/            # admin-only API (games, reports, requests, announcement)
-│       ├── announcement/     # public GET — announcement popup content
-│       ├── account/          # avatar, password, bookmarks
-│       ├── requests/         # vote
-│       ├── internal/         # shard-check (cron-only, see Write-Shard Pointer)
-│       └── health/           # health check
+│   ├── page.tsx               # Homepage (ISR, revalidate 5m, đọc từ Redis homepage index)
+│   ├── games/                 # Thư viện + game detail
+│   ├── requests/              # Đề xuất game
+│   ├── donate/                # Trang ủng hộ
+│   ├── terms/                 # Điều khoản sử dụng
+│   ├── login/ register/       # Auth pages
+│   ├── forgot-password/       # Nhập email để yêu cầu reset mật khẩu
+│   ├── reset-password/        # Trang đặt mật khẩu mới (theo link trong email)
+│   ├── myaccount/             # Trang cá nhân
+│   ├── maintenance/           # Trang hiển thị khi bật chế độ bảo trì
+│   ├── admin/                 # Admin panel (protected): games, requests, reports, users, announcement, maintenance
+│   └── api/                   # Route handlers
+│       ├── auth/              # login, logout, register, me, forgot-password, reset-password
+│       ├── games/             # public game API
+│       ├── genres/            # public GET — danh sách thể loại (fanOut, dedupe theo slug)
+│       ├── admin/             # admin-only API (games, users, reports, requests, announcement, maintenance, upload)
+│       ├── announcement/      # public GET — announcement popup content
+│       ├── account/           # avatar, password, bookmarks
+│       ├── requests/          # vote
+│       ├── internal/          # cron-only routes (xem Database Architecture)
+│       │   ├── shard-check/   # cập nhật write-shard pointer
+│       │   ├── reindex/       # build & cache homepage index vào Redis
+│       │   └── keep-alive/    # ping mọi shard, chống Supabase free-tier tự pause
+│       └── health/            # health check
 ├── components/
-│   ├── games/                # GameCard, BookmarkButton, DownloadButton, ...
-│   ├── admin/                # GameForm, AnnouncementForm
-│   ├── announcement/         # AnnouncementBody — shared renderer (popup + admin preview)
-│   ├── ui/                   # FormField, Button, Toast, Modal
-│   └── layout/               # Navbar, Footer, AnnouncementModal
+│   ├── games/                 # GameCard, BookmarkButton, DownloadButton, ...
+│   ├── admin/                 # GameForm, AnnouncementForm
+│   ├── announcement/          # AnnouncementBody — shared renderer (popup + admin preview)
+│   ├── requests/               # VoteModal
+│   ├── ui/                     # FormField, Button, Toast, Modal, SkeletonCard, TurnstileWidget
+│   └── layout/                 # Navbar, Footer, AnnouncementModal, VipAnnouncementBar
 ├── lib/
 │   ├── db/
-│   │   ├── index.ts          # ShardedDb class
-│   │   └── schema.sql        # Database schema
-│   ├── announcement.ts       # getAnnouncement / updateAnnouncement (broadcast fanOut helpers)
-│   ├── announcementStore.ts  # Client IndexedDB dismissal storage for the popup
-│   ├── redis.ts              # Upstash Redis client + write-shard pointer key/TTL
-│   ├── queries.ts            # Server-side query helpers
-│   ├── auth.ts               # Auth barrel re-export
-│   ├── jwt.ts                # JWT utils (Edge-safe)
-│   ├── password.ts           # bcryptjs (Node.js only)
-│   ├── avatars.ts            # Preset avatar list
-│   ├── turnstile.ts          # Cloudflare Turnstile verification
-│   ├── vip.ts                # VIP status computation (permanent / timed)
-│   ├── linkShortener.ts      # bbmkts.com "vượt link" wrapping for non-VIP downloads
-│   └── utils.ts              # Formatters, label helpers
+│   │   ├── index.ts            # ShardedDb class
+│   │   └── schema.sql          # Database schema (luôn ở bản mới nhất)
+│   ├── emails/
+│   │   └── passwordResetEmail.ts # HTML/text template cho email đặt lại mật khẩu
+│   ├── announcement.ts         # getAnnouncement / updateAnnouncement (broadcast fanOut helpers)
+│   ├── announcementStore.ts    # Client IndexedDB dismissal storage for the popup
+│   ├── redis.ts                # Upstash Redis client + write-shard pointer + homepage index key/TTL
+│   ├── queries.ts              # Server-side query helpers, gồm getHomepageIndex()
+│   ├── auth.ts                 # Auth barrel re-export
+│   ├── jwt.ts                  # JWT utils (Edge-safe)
+│   ├── password.ts             # bcryptjs (Node.js only)
+│   ├── passwordReset.ts        # Sinh & hash reset token (Node.js crypto, TTL 60 phút)
+│   ├── email.ts                # Gửi email qua Resend REST API (fetch, fail-soft)
+│   ├── avatars.ts              # Preset avatar list
+│   ├── storage.ts              # Upload ảnh vào Supabase Storage
+│   ├── turnstile.ts            # Cloudflare Turnstile verification
+│   ├── vip.ts                  # VIP status computation (permanent / timed)
+│   ├── adminGuard.ts           # Guard cho admin-only routes/pages
+│   ├── maintenance.ts          # Đọc/ghi cờ chế độ bảo trì (Redis)
+│   ├── linkShortener.ts        # bbmkts.com "vượt link" wrapping for non-VIP downloads
+│   └── utils.ts                # Formatters, label helpers
 ├── types/
-│   └── index.ts              # TypeScript types & interfaces
-└── middleware.ts             # Edge middleware — auth guard
+│   └── index.ts                # TypeScript types & interfaces
+└── middleware.ts                # Edge middleware — auth guard + maintenance mode
+
+migrations/
+├── 002_games_updated_at_ignore_counters.sql  # Chỉ dành cho deployment cũ (xem Getting Started bước 3)
+└── 003_password_reset.sql                    # Chỉ dành cho deployment cũ
 
 scripts/
-├── db-setup.mjs              # Apply schema to all shards
-├── db-reset.mjs              # Wipe all shards (DANGER)
-├── create-admin.mjs          # Create / promote admin account
-├── list-users.mjs            # List users across shards (role/VIP/search filters)
-├── delete-user.mjs           # Permanently delete user(s) + cross-shard data
-└── remove-admin.mjs          # Demote admin account(s) to regular user
+├── db-setup.mjs               # Apply schema to all shards
+├── db-reset.mjs                # Wipe all shards (DANGER)
+├── check-genre-shards.mjs      # Kiểm tra bảng genres đồng bộ id giữa các shard
+├── fix-genre-shard-ids.mjs     # Sửa lệch id genres giữa các shard
+├── create-admin.mjs            # Create / promote admin account
+├── list-users.mjs              # List users across shards (role/VIP/search filters)
+├── delete-user.mjs             # Permanently delete user(s) + cross-shard data
+└── remove-admin.mjs            # Demote admin account(s) to regular user
 ```
 
 ---

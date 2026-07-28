@@ -7,7 +7,7 @@ import { formatNumber } from '@/lib/utils';
 
 import { getHomepageIndex } from '@/lib/queries';
 
-const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
+const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://vnsvault.vercel.app';
 
 export const metadata: Metadata = {
   alternates: { canonical: BASE },
@@ -53,7 +53,7 @@ export default async function HomePage() {
           {/* BG image */}
           <div className="absolute inset-0" aria-hidden="true">
             <Image
-              src="/bg.jpg"
+              src="/imgs/wallpaper.png"
               alt=""
               fill
               className="object-cover object-center opacity-35"

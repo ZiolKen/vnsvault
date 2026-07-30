@@ -43,7 +43,7 @@ export async function PATCH(req: NextRequest) {
     // Admins get a custom URL — still require it to look like a real URL
     // (absolute http(s) or a site-relative path) rather than arbitrary text.
     if (isAdmin && !isPresetAvatar(avatarUrl)) {
-      const looksValid = /^https?:\/\/.+/i.test(avatarUrl) || avatarUrl.startsWith('/');
+      const looksValid = /^https?:\/\/.+/i.test(avatarUrl) || (avatarUrl.startsWith('/') && !avatarUrl.startsWith('//'));
       if (!looksValid) {
         return NextResponse.json({ success: false, error: 'URL không hợp lệ' }, { status: 400 });
       }

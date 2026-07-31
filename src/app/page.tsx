@@ -56,7 +56,7 @@ export default async function HomePage() {
               src="/imgs/wallpaper.png"
               alt=""
               fill
-              className="object-cover object-center opacity-35"
+              className="object-cover object-center opacity-50"
               priority
               sizes="100vw"
               quality={85}

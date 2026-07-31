@@ -132,10 +132,17 @@ export async function getHotGames(limit = 8): Promise<Game[]> {
   // the WHOLE catalog in JS on every call; this bounds both the bytes
   // pulled and the JS sort to (shard count) × limit regardless of how many
   // games are published — same technique as /api/games's pagination.
+  // Explicit column list instead of `g.*`: the card only ever renders
+  // id/slug/title/cover_url/status/engine/age_rating/view_count/
+  // download_count, so there's no reason to pull `description`,
+  // `banner_url`, `translator_note` (all TEXT, can be large) across every
+  // shard for a list that never reads them. Translator JOIN dropped
+  // entirely too — GameCard never renders translator info, so the join
+  // was pure per-shard cost with no payoff.
   const rows = await db.fanOut<GameRow>(
-    `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug
+    `SELECT g.id, g.slug, g.title, g.cover_url, g.status, g.engine, g.age_rating,
+            g.view_count, g.download_count
      FROM games g
-     LEFT JOIN translators t ON t.id = g.translator_id
      WHERE g.published = TRUE
      ORDER BY g.download_count DESC, g.id ASC
      LIMIT $1`,
@@ -153,10 +160,12 @@ export async function getHotGames(limit = 8): Promise<Game[]> {
  */
 export async function getNewGames(limit = 8): Promise<Game[]> {
   // Same per-shard LIMIT pushdown as getHotGames — see comment there.
+  // Explicit column list — see getHotGames' comment for why: same
+  // trimmed set, plus `created_at` since it's the sort key here.
   const rows = await db.fanOut<GameRow>(
-    `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug
+    `SELECT g.id, g.slug, g.title, g.cover_url, g.status, g.engine, g.age_rating,
+            g.view_count, g.download_count, g.created_at
      FROM games g
-     LEFT JOIN translators t ON t.id = g.translator_id
      WHERE g.published = TRUE
      ORDER BY g.created_at DESC, g.id ASC
      LIMIT $1`,
@@ -173,10 +182,12 @@ export async function getNewGames(limit = 8): Promise<Game[]> {
  */
 export async function getFeaturedGames(limit = 4): Promise<Game[]> {
   // Same per-shard LIMIT pushdown as getHotGames — see comment there.
+  // Explicit column list — see getHotGames' comment for why: same
+  // trimmed set, plus `updated_at` since it's the sort key here.
   const rows = await db.fanOut<GameRow>(
-    `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug
+    `SELECT g.id, g.slug, g.title, g.cover_url, g.status, g.engine, g.age_rating,
+            g.view_count, g.download_count, g.updated_at
      FROM games g
-     LEFT JOIN translators t ON t.id = g.translator_id
      WHERE g.published = TRUE AND g.is_featured = TRUE
      ORDER BY g.updated_at DESC, g.id ASC
      LIMIT $1`,
@@ -226,9 +237,11 @@ export async function getFeaturedGames(limit = 4): Promise<Game[]> {
 export async function getGameBySlug(slug: string): Promise<Game | null> {
   return cached(`game:slug:${slug}`, SHORT_CACHE_TTL_SECONDS, () =>
     db.withRow<GameRow, Game>(
-      `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug,
-              t.bio AS translator_bio, t.discord_url AS translator_discord,
-              t.avatar_url AS translator_avatar
+      // Only translator_name/translator_slug are actually rendered on the
+      // detail page (title line + sidebar "Dịch giả" row) — bio/discord/
+      // avatar dropped along with the "Thương hiệu Việt hóa" sidebar card
+      // that used to display them.
+      `SELECT g.*, t.name AS translator_name, t.slug AS translator_slug
        FROM games g
        LEFT JOIN translators t ON t.id = g.translator_id
        WHERE g.slug = $1 AND g.published = TRUE
@@ -237,22 +250,17 @@ export async function getGameBySlug(slug: string): Promise<Game | null> {
       async (client, gameRow) => {
         const game = gameRow as unknown as Game;
 
-        // The JOIN above returns flat `translator_name` / `translator_slug` /
-        // `translator_bio` / `translator_discord` / `translator_avatar`
-        // columns, but every consumer (games/[slug]/page.tsx) reads a nested
-        // `game.translator.{name,avatar_url,bio,discord_url}` object. Without
-        // this, `game.translator` is always undefined even when
-        // `translator_id` is set — the translator name/avatar never render,
-        // only the raw id sits unused on the row.
+        // The JOIN above returns flat `translator_name` / `translator_slug`
+        // columns, but the consumer (games/[slug]/page.tsx) reads a nested
+        // `game.translator.{name,slug}` object. Without this, `game.translator`
+        // is always undefined even when `translator_id` is set — the
+        // translator name never renders, only the raw id sits unused on the row.
         const row = gameRow as unknown as Record<string, unknown>;
         if (game.translator_id && row.translator_name) {
           game.translator = {
             id: game.translator_id,
             name: row.translator_name as string,
             slug: row.translator_slug as string,
-            bio: (row.translator_bio as string) ?? undefined,
-            discord_url: (row.translator_discord as string) ?? undefined,
-            avatar_url: (row.translator_avatar as string) ?? undefined,
           };
         }
 

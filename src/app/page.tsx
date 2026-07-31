@@ -111,7 +111,13 @@ export default async function HomePage() {
                 className="hidden lg:block absolute bottom-20 right-4 w-52 glass rounded-xl overflow-hidden hover:border-copper/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-copper/20 group fade-in"
                 aria-label={`Game nổi bật: ${hero.title}`}
               >
-                <div className="vault-overlay relative aspect-[3/4]">
+                {/* overflow-hidden here (not just on the outer Link) — without it,
+                    the group-hover:scale-105 transform on the <Image> below can
+                    escape the outer rounded-xl clip during the hover transition,
+                    showing a sliver of unrounded/unshadowed image at the bottom
+                    edge. Clipping right at the image's own box, like GameCard
+                    does, keeps it contained regardless of the outer transform. */}
+                <div className="vault-overlay relative aspect-[3/4] overflow-hidden rounded-xl">
                   {hero.cover_url ? (
                     <Image src={hero.cover_url} alt={`Ảnh bìa ${hero.title}`} fill unoptimized className="object-cover group-hover:scale-105 transition-transform duration-500" sizes="208px" />
                   ) : (

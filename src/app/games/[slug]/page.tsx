@@ -280,24 +280,6 @@ export default async function GameDetailPage({ params }: Props) {
                 </div>
               )}
 
-              {/* THƯƠNG HIỆU VIỆT HÓA */}
-              {game.translator && (
-                <div className="bg-surface border border-border rounded-xl p-4">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-3">THƯƠNG HIỆU VIỆT HÓA</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-lg bg-copper/15 border border-copper/25 flex items-center justify-center shrink-0 overflow-hidden">
-                      {game.translator.avatar_url
-                        ? <Image src={game.translator.avatar_url} alt={game.translator.name} width={44} height={44} unoptimized className="object-cover w-full h-full" />
-                        : <span className="font-cinzel text-sm font-bold text-copper-light">{game.translator.name.slice(0, 2).toUpperCase()}</span>}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-ghost truncate">{game.translator.name}</p>
-                      {game.translator.discord_url && <a href={game.translator.discord_url} target="_blank" rel="noopener noreferrer" className="text-xs text-copper-light hover:text-copper transition-colors">Discord</a>}
-                    </div>
-                  </div>
-                  {game.translator.bio && <p className="text-xs text-ghost-dim mt-3 leading-relaxed line-clamp-3">{game.translator.bio}</p>}
-                </div>
-              )}
             </aside>
           </div>
         </div>

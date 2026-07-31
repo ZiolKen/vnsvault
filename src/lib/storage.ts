@@ -24,12 +24,20 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'vnsvault-uploads';
 
+// NOTE: .jpg and .jpeg both map to the MIME type `image/jpeg` — there's no
+// way to distinguish them by MIME type alone (this object was previously
+// keyed with 'image/jpeg' listed twice, once mapped to 'jpg' and once to
+// 'jpeg' — a duplicate object key, so the second silently clobbered the
+// first and the extension picked for storage was never what was intended).
+// Both extensions were already accepted for upload either way (the file
+// picker's `accept="image/jpeg,..."` and the magic-byte check below are
+// both MIME-based, not extension-based) — this only fixes which extension
+// the stored file ends up with.
 export const ALLOWED_UPLOAD_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
-  'image/jpeg': 'jpeg',
 };
 
 // 4MB, not 5MB — Vercel Serverless/Edge Functions have a HARD, non-configurable

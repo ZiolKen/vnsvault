@@ -29,6 +29,7 @@ export const ALLOWED_UPLOAD_TYPES: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'image/jpeg': 'jpeg',
 };
 
 // 4MB, not 5MB — Vercel Serverless/Edge Functions have a HARD, non-configurable

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5">
-<title>Cách fix lỗi không hiển thị tiếng Việt với game sử dụng BepInEx trên Winlator</title>
+<title>Cách fix lỗi không hiển thị tiếng Việt với game sử dụng BepInEx trên Winlator | VNSVault</title>
 <meta name="description" content="Hướng dẫn fix lỗi không hiển thị tiếng Việt (font chữ lỗi, ô vuông) khi chơi game sử dụng BepInEx trên Winlator bằng cách override thư viện winhttp trong Wine Configuration.">
 <meta name="theme-color" content="#b87333">
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -13,22 +13,12 @@
 <meta property="og:type" content="article">
 <meta property="og:locale" content="vi_VN">
 <meta property="og:site_name" content="VNSVault">
-<meta property="og:title" content="Cách fix lỗi không hiển thị tiếng Việt với game sử dụng BepInEx trên Winlator">
+<meta property="og:title" content="Cách fix lỗi không hiển thị tiếng Việt với game sử dụng BepInEx trên Winlator | VNSVault">
 <meta property="og:description" content="Hướng dẫn từng bước fix lỗi không hiển thị tiếng Việt trên Winlator bằng Wine Configuration.">
 <meta property="og:url" content="https://vnsvault.qzz.io/fix-loi-khong-co-viet-hoa-tren-winlator">
 <meta property="og:image" content="https://vnsvault.qzz.io/og-default.png">
 <meta name="twitter:card" content="summary_large_image">
-
-<!--
-  Fonts: mirrors src/app/globals.css / layout.tsx design tokens
-  (--font-cinzel / --font-cormorant / --font-playfair / --font-inter).
-  Loaded here via Google Fonts CDN with the same families + Vietnamese
-  subset the app is *supposed* to load via next/font — the live site's
-  <html> tag is currently missing the next/font variable classes (no
-  next/font import in layout.tsx at all), so production silently falls
-  back to Georgia/system-ui. This page loads the real families directly
-  so it doesn't inherit that regression. See chat for the layout.tsx fix.
--->
+  
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -60,8 +50,7 @@
     flex-direction: column;
     background-color: var(--obsidian);
     background-image:
-      radial-gradient(ellipse at 50% 0%, rgba(184,115,51,0.14) 0%, transparent 60%),
-      url('/bg.jpg');
+      radial-gradient(ellipse at 50% 0%, rgba(184,115,51,0.14) 0%, transparent 60%);
     background-size: cover;
     background-attachment: fixed;
     background-position: center top;
@@ -458,7 +447,7 @@
         <kbd>Wine Configuration</kbd>.
       </p>
       <div class="step-imgs">
-        <figure><img src="imgs/step-1.webp" alt="Chọn Start → System Tools → Wine Configuration" loading="lazy"></figure>
+        <figure><img src="./imgs/step-1.webp" alt="Chọn Start → System Tools → Wine Configuration" loading="lazy"></figure>
       </div>
     </div>
 
@@ -471,7 +460,7 @@
         Cửa sổ <kbd>Wine configuration</kbd> hiện ra, các bạn chọn tab <kbd>Libraries</kbd>.
       </p>
       <div class="step-imgs">
-        <figure><img src="imgs/step-2.webp" alt="Chọn tab Libraries trong Wine Configuration" loading="lazy"></figure>
+        <figure><img src="./imgs/step-2.webp" alt="Chọn tab Libraries trong Wine Configuration" loading="lazy"></figure>
       </div>
     </div>
 
@@ -485,8 +474,8 @@
         hoặc gõ trực tiếp <code>winhttp</code> vào ô, sau đó chọn <kbd>Add</kbd>.
       </p>
       <div class="step-imgs two-up">
-        <figure><img src="imgs/step-3a.webp" alt="Chọn mũi tên xuống và tìm winhttp trong danh sách" loading="lazy"></figure>
-        <figure><img src="imgs/step-3b.webp" alt="Bấm Add để thêm override winhttp" loading="lazy"></figure>
+        <figure><img src="./imgs/step-3a.webp" alt="Chọn mũi tên xuống và tìm winhttp trong danh sách" loading="lazy"></figure>
+        <figure><img src="./imgs/step-3b.webp" alt="Bấm Add để thêm override winhttp" loading="lazy"></figure>
       </div>
     </div>
 
@@ -500,7 +489,7 @@
         <kbd>Existing overrides</kbd>, chọn <kbd>Apply</kbd> rồi chạy lại game.
       </p>
       <div class="step-imgs">
-        <figure><img src="imgs/step-4.webp" alt="Chọn Apply để áp dụng override winhttp" loading="lazy"></figure>
+        <figure><img src="./imgs/step-4.webp" alt="Chọn Apply để áp dụng override winhttp" loading="lazy"></figure>
       </div>
     </div>
 

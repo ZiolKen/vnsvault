@@ -12,6 +12,7 @@ import DownloadButton from '@/components/games/DownloadButton';
 import BookmarkButton from '@/components/games/BookmarkButton';
 import ReportLinkButton from '@/components/games/ReportLinkButton';
 import DetailTabs from '@/components/games/DetailTabs';
+import TranslatorNote from '@/components/games/TranslatorNote';
 import { getGameBySlug, isBookmarkedByUser, bumpGameViewCount } from '@/lib/queries';
 import { getSession } from '@/lib/jwt';
 
@@ -90,7 +91,7 @@ export default async function GameDetailPage({ params }: Props) {
       {game.translator_note && (
         <div className="mt-5 p-4 bg-copper/5 border border-copper/20 rounded-xl">
           <p className="text-xs font-semibold uppercase tracking-widest text-copper mb-2">Ghi Chú Nhóm Dịch</p>
-          <p className="text-ghost-dim text-sm leading-relaxed">{game.translator_note}</p>
+          <TranslatorNote note={game.translator_note} />
         </div>
       )}
     </div>

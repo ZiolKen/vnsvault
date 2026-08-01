@@ -374,6 +374,7 @@ export default function GameForm({ initial, gameId }: Props) {
               value={form.translator_note}
               onChange={e => set('translator_note', e.target.value)}
               placeholder="Lời nhắn, code, ghi chú..."
+              hint="Hỗ trợ chèn link dạng [chữ hiển thị](url) — ví dụ: [Vào nhóm dịch](https://t.me/...). URL trần (https://...) cũng tự thành link. Chỉ chấp nhận http/https."
             />
           </div>
         </section>

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Cinzel, Cormorant_Garamond, Playfair_Display, Inter } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import Script from 'next/script';
@@ -9,6 +10,44 @@ import AnnouncementModal from '@/components/layout/AnnouncementModal';
 import { ToastProvider } from '@/components/ui/Toast';
 import { safeJsonLd } from '@/lib/utils';
 import './globals.css';
+
+// These four families back the --font-cinzel / --font-cormorant /
+// --font-playfair / --font-inter CSS variables referenced throughout
+// globals.css and tailwind.config.ts. They must be loaded here and their
+// `.variable` classes applied to <html> below — otherwise those custom
+// properties are never defined and every font-cinzel/font-heading
+// element silently falls back to Georgia/system-ui.
+const cinzel = Cinzel({
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
+  variable: '--font-cinzel',
+  display: 'swap',
+});
+
+// Cormorant Garamond loads its dedicated `vietnamese` subset so diacritics
+// render natively for headings — see the comment on .font-heading in
+// globals.css.
+const cormorant = Cormorant_Garamond({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['400', '500', '600', '700'],
+  style: ['normal', 'italic'],
+  variable: '--font-cormorant',
+  display: 'swap',
+});
+
+const playfair = Playfair_Display({
+  subsets: ['latin'],
+  weight: ['600', '700', '800'],
+  variable: '--font-playfair',
+  display: 'swap',
+});
+
+const inter = Inter({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-inter',
+  display: 'swap',
+});
 
 const APP_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://vnsvault.vercel.app';
 const APP_NAME = 'VNSVault';
@@ -88,7 +127,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="vi"
-      className={`h-full `}
+      className={`h-full ${cinzel.variable} ${cormorant.variable} ${playfair.variable} ${inter.variable}`}
     >
       <head>
         {/* Google Analytics — next/script handles correct loading/ordering,

@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5">
+<title>Cách fix lỗi không hiển thị tiếng Việt với game sử dụng BepInEx trên Winlator</title>
+<meta name="description" content="Hướng dẫn fix lỗi không hiển thị tiếng Việt (font chữ lỗi, ô vuông) khi chơi game sử dụng BepInEx trên Winlator bằng cách override thư viện winhttp trong Wine Configuration.">
+<meta name="theme-color" content="#b87333">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="canonical" href="https://vnsvault.qzz.io/fix-loi-khong-co-viet-hoa-tren-winlator">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="vi_VN">
+<meta property="og:site_name" content="VNSVault">
+<meta property="og:title" content="Cách fix lỗi không hiển thị tiếng Việt với game sử dụng BepInEx trên Winlator">
+<meta property="og:description" content="Hướng dẫn từng bước fix lỗi không hiển thị tiếng Việt trên Winlator bằng Wine Configuration.">
+<meta property="og:url" content="https://vnsvault.qzz.io/fix-loi-khong-co-viet-hoa-tren-winlator">
+<meta property="og:image" content="https://vnsvault.qzz.io/og-default.png">
+<meta name="twitter:card" content="summary_large_image">
+
+<!--
+  Fonts: mirrors src/app/globals.css / layout.tsx design tokens
+  (--font-cinzel / --font-cormorant / --font-playfair / --font-inter).
+  Loaded here via Google Fonts CDN with the same families + Vietnamese
+  subset the app is *supposed* to load via next/font — the live site's
+  <html> tag is currently missing the next/font variable classes (no
+  next/font import in layout.tsx at all), so production silently falls
+  back to Georgia/system-ui. This page loads the real families directly
+  so it doesn't inherit that regression. See chat for the layout.tsx fix.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --obsidian:     #09090f;
+    --vault:        #0f0f1a;
+    --surface:      #13131f;
+    --border:       #1e1e30;
+    --copper:       #b87333;
+    --copper-light: #d4956a;
+    --gold:         #c9a84c;
+    --muted:        #5a5a7a;
+    --dim:          #3a3a55;
+    --ghost:        #e0e0f0;
+    --ghost-dim:    #9090b0;
+    --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+    --vip-banner-h: 0px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; overflow-y: scroll; height: 100%; }
+
+  body {
+    margin: 0;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--obsidian);
+    background-image:
+      radial-gradient(ellipse at 50% 0%, rgba(184,115,51,0.14) 0%, transparent 60%),
+      url('/bg.jpg');
+    background-size: cover;
+    background-attachment: fixed;
+    background-position: center top;
+    color: var(--ghost);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: rgba(184,115,51,0.35); color: var(--ghost); }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--vault); }
+  ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--copper); }
+  * { scrollbar-width: thin; scrollbar-color: var(--dim) var(--vault); }
+
+  :focus-visible {
+    outline: 2px solid var(--copper);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  a { color: inherit; text-decoration: none; }
+  ul { list-style: none; margin: 0; padding: 0; }
+
+  .font-heading { font-family: 'Cormorant Garamond', Georgia, serif; }
+  .font-cinzel  { font-family: 'Cinzel', 'Cormorant Garamond', Georgia, serif; }
+
+  .glass {
+    background: rgba(15,15,26,0.78);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    border: 1px solid rgba(30,30,48,0.7);
+  }
+
+  .skip-link {
+    position: fixed; top: -100px; left: 16px; z-index: 100;
+    background: linear-gradient(160deg, var(--copper), #9a5f2a);
+    color: #fff; font-size: 0.85rem; font-weight: 600;
+    padding: 10px 16px; border-radius: 8px;
+    transition: top 0.2s;
+  }
+  .skip-link:focus { top: 16px; }
+
+  /* ── Header / Navbar ─────────────────────────────────────── */
+  .site-nav { position: sticky; top: 0; z-index: 50; }
+  .nav-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 16px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .nav-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; min-height: 44px; }
+  .nav-brand img { width: 34px; height: 34px; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4)); }
+  .nav-brand span {
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--copper-light);
+    letter-spacing: 0.02em;
+  }
+
+  .nav-links { display: none; align-items: center; gap: 2px; margin-left: 12px; }
+  .nav-links a {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    color: var(--ghost-dim);
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s, background 0.2s;
+  }
+  .nav-links a:hover { color: var(--ghost); background: var(--surface); }
+
+  .nav-spacer { flex: 1; }
+
+  .nav-icon-btn {
+    padding: 10px;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    color: var(--ghost-dim);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s;
+  }
+  .nav-icon-btn:hover { color: var(--copper-light); background: var(--surface); }
+
+  .nav-auth { display: none; align-items: center; gap: 8px; }
+  .nav-auth a { padding: 8px 14px; font-size: 0.88rem; border-radius: 6px; min-height: 40px; display: flex; align-items: center; }
+  .btn-login { color: var(--ghost-dim); transition: color 0.2s; }
+  .btn-login:hover { color: var(--ghost); }
+  .btn-register {
+    background: rgba(184,115,51,0.2);
+    color: var(--copper-light);
+    border: 1px solid rgba(184,115,51,0.4);
+    transition: background 0.2s;
+  }
+  .btn-register:hover { background: rgba(184,115,51,0.3); }
+
+  .nav-burger { display: flex; }
+
+  @media (min-width: 768px) {
+    .nav-links { display: flex; }
+    .nav-auth { display: flex; }
+    .nav-burger { display: none; }
+  }
+
+  /* ── Footer ──────────────────────────────────────────────── */
+  .site-footer { margin-top: auto; border-top: 1px solid rgba(30,30,48,0.6); background: rgba(15,15,26,0.8); }
+  .footer-inner { max-width: 1280px; margin: 0 auto; padding: 48px 16px; }
+
+  .footer-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 32px; margin-bottom: 40px; }
+  .footer-brand { grid-column: span 2; }
+
+  .footer-logo { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .footer-logo img { width: 32px; height: 32px; opacity: 0.9; }
+  .footer-logo span { font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600; color: var(--copper-light); }
+  .footer-desc { font-size: 0.9rem; color: var(--ghost-dim); line-height: 1.7; margin: 0 0 16px; max-width: 380px; }
+  .footer-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+  .footer-badge {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    background: rgba(184,115,51,0.1);
+    color: var(--copper-light);
+    border: 1px solid rgba(184,115,51,0.2);
+    border-radius: 999px;
+  }
+
+  .footer-col p.footer-heading {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin: 0 0 16px;
+  }
+  .footer-col ul { display: flex; flex-direction: column; gap: 10px; }
+  .footer-col a { font-size: 0.9rem; color: var(--ghost-dim); transition: color 0.2s; }
+  .footer-col a:hover { color: var(--copper-light); }
+
+  .footer-bottom {
+    padding-top: 24px;
+    border-top: 1px solid rgba(30,30,48,0.4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+  .footer-bottom p { margin: 0; font-size: 0.78rem; color: var(--muted); }
+
+  @media (min-width: 768px) {
+    .footer-grid { grid-template-columns: repeat(4, 1fr); }
+    .footer-brand { grid-column: span 1; }
+    .footer-bottom { flex-direction: row; justify-content: space-between; text-align: left; }
+  }
+
+  /* ── Page content ────────────────────────────────────────── */
+  main { flex: 1; max-width: 860px; width: 100%; margin: 0 auto; padding: 48px 20px 80px; }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--copper-light);
+    background: rgba(184,115,51,0.1);
+    border: 1px solid rgba(184,115,51,0.28);
+    padding: 6px 14px;
+    border-radius: 999px;
+    margin-bottom: 22px;
+    animation: fadeIn 0.5s var(--ease-out-quart) both;
+  }
+  .eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--copper); box-shadow: 0 0 8px var(--copper); }
+
+  h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(1.9rem, 4.2vw, 2.9rem);
+    line-height: 1.15;
+    margin: 0 0 16px;
+    color: var(--ghost);
+    animation: slideUp 0.5s var(--ease-out-quart) both;
+    animation-delay: 40ms;
+  }
+
+  .lede {
+    color: var(--ghost-dim);
+    font-size: 1.05rem;
+    max-width: 640px;
+    margin: 0 0 40px;
+    animation: slideUp 0.5s var(--ease-out-quart) both;
+    animation-delay: 90ms;
+  }
+  .lede strong { color: var(--ghost); font-weight: 600; }
+
+  .notice {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: rgba(201,168,76,0.06);
+    border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 44px;
+    animation: slideUp 0.5s var(--ease-out-quart) both;
+    animation-delay: 130ms;
+  }
+  .notice svg { flex-shrink: 0; margin-top: 2px; width: 18px; height: 18px; color: var(--gold); }
+  .notice p { margin: 0; font-size: 0.92rem; color: var(--ghost-dim); }
+  .notice code {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--copper-light);
+    padding: 1px 7px;
+    border-radius: 5px;
+    font-size: 0.88em;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+  }
+
+  .steps { display: flex; flex-direction: column; gap: 28px; position: relative; }
+
+  .step {
+    position: relative;
+    background: rgba(19,19,31,0.72);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 26px 26px 28px;
+    animation: slideUp 0.5s var(--ease-out-quart) both;
+    transition: border-color 0.25s var(--ease-out-quart), box-shadow 0.25s var(--ease-out-quart);
+  }
+  .step:hover {
+    border-color: rgba(184,115,51,0.4);
+    box-shadow: 0 0 0 1px rgba(184,115,51,0.15), 0 12px 32px rgba(0,0,0,0.35);
+  }
+
+  .step-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  .step-num {
+    flex-shrink: 0;
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cinzel', serif;
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--gold);
+    background: linear-gradient(160deg, rgba(184,115,51,0.22), rgba(184,115,51,0.05));
+    border: 1px solid rgba(184,115,51,0.4);
+  }
+  .step h2 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 600;
+    font-size: 1.35rem;
+    margin: 0;
+    color: var(--ghost);
+  }
+  .step p { margin: 0 0 18px; color: var(--ghost-dim); font-size: 0.98rem; }
+  .step p:last-of-type { margin-bottom: 0; }
+  .step p.has-img { margin-bottom: 18px; }
+
+  .step-imgs { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .step-imgs.two-up { grid-template-columns: 1fr 1fr; }
+  .step-imgs figure { margin: 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--vault); }
+  .step-imgs img { display: block; width: 100%; height: auto; }
+
+  kbd {
+    background: var(--surface);
+    border: 1px solid var(--dim);
+    border-bottom-width: 2px;
+    color: var(--ghost);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.88em;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+  }
+
+  .done {
+    margin-top: 40px;
+    text-align: center;
+    padding: 34px 24px;
+    border-radius: 16px;
+    border: 1px solid rgba(184,115,51,0.35);
+    background: radial-gradient(ellipse at 50% 0%, rgba(184,115,51,0.14) 0%, transparent 70%), rgba(19,19,31,0.6);
+    animation: slideUp 0.5s var(--ease-out-quart) both;
+  }
+  .done .check {
+    width: 46px; height: 46px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(184,115,51,0.15);
+    border: 1px solid rgba(184,115,51,0.45);
+    color: var(--copper-light);
+  }
+  .done h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.4rem; margin: 0 0 8px; color: var(--ghost); }
+  .done p { margin: 0; color: var(--ghost-dim); font-size: 0.95rem; }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 40px;
+    font-size: 0.9rem;
+    color: var(--copper-light);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+  }
+  .back-link:hover { border-color: var(--copper-light); }
+
+  @keyframes fadeIn  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+
+  @media (max-width: 560px) {
+    .step-imgs.two-up { grid-template-columns: 1fr; }
+    .step { padding: 20px 18px 22px; }
+  }
+</style>
+</head>
+<body>
+
+<a href="#main-content" class="skip-link">Bỏ qua điều hướng</a>
+
+<!-- ── Header (mirrors src/components/layout/Navbar.tsx) ── -->
+<nav class="site-nav glass" role="navigation" aria-label="Điều hướng chính">
+  <div class="nav-inner">
+    <a href="https://vnsvault.qzz.io" class="nav-brand" aria-label="VNSVault – Trang chủ">
+      <img src="/logo.png" alt="" aria-hidden="true">
+      <span>VNSVault</span>
+    </a>
+
+    <div class="nav-links" role="list">
+      <a href="https://vnsvault.qzz.io/games" role="listitem">Thư Viện</a>
+      <a href="https://vnsvault.qzz.io/requests" role="listitem">Đề Xuất</a>
+      <a href="https://vnsvault.qzz.io/donate" role="listitem">Ủng Hộ</a>
+    </div>
+
+    <div class="nav-spacer"></div>
+
+    <a href="https://vnsvault.qzz.io/games" class="nav-icon-btn" aria-label="Tìm kiếm">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-6-6"/></svg>
+    </a>
+
+    <div class="nav-auth">
+      <a href="https://vnsvault.qzz.io/login" class="btn-login">Đăng nhập</a>
+      <a href="https://vnsvault.qzz.io/register" class="btn-register">Đăng ký</a>
+    </div>
+
+    <a href="https://vnsvault.qzz.io" class="nav-icon-btn nav-burger" aria-label="Mở menu">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </a>
+  </div>
+</nav>
+
+<main id="main-content">
+  <span class="eyebrow">Hướng dẫn · Winlator</span>
+
+  <h1 class="font-heading">Cách fix lỗi không hiển thị tiếng Việt với game sử dụng BepInEx trên Winlator</h1>
+
+  <p class="lede">
+    Một số game dùng <strong>BepInEx</strong> khi chạy trên <strong>Winlator</strong> sẽ bị lỗi
+    không hiển thị được tiếng Việt (chữ bị mất dấu, hiện ô vuông, hoặc không load được font).
+    Nguyên nhân thường do thư viện <strong>winhttp</strong> của Wine chưa được override đúng cách.
+    Làm theo 4 bước bên dưới để khắc phục.
+  </p>
+
+  <div class="notice">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+    <p>Cách này áp dụng cho các bản Winlator dựa trên Wine (Winlator Cmod, Winlator Glibc, v.v.).
+      Nếu giao diện của bạn hơi khác một chút, hãy tìm mục tương đương &mdash; các bước vẫn giữ nguyên logic.</p>
+  </div>
+
+  <div class="steps">
+
+    <div class="step" style="animation-delay:160ms">
+      <div class="step-head">
+        <div class="step-num">1</div>
+        <h2 class="font-heading">Mở Wine Configuration</h2>
+      </div>
+      <p class="has-img">
+        Chọn <kbd>Start</kbd> ở góc trái cuối màn hình &rarr; <kbd>System Tools</kbd> &rarr;
+        <kbd>Wine Configuration</kbd>.
+      </p>
+      <div class="step-imgs">
+        <figure><img src="imgs/step-1.webp" alt="Chọn Start → System Tools → Wine Configuration" loading="lazy"></figure>
+      </div>
+    </div>
+
+    <div class="step" style="animation-delay:210ms">
+      <div class="step-head">
+        <div class="step-num">2</div>
+        <h2 class="font-heading">Chuyển sang tab Libraries</h2>
+      </div>
+      <p class="has-img">
+        Cửa sổ <kbd>Wine configuration</kbd> hiện ra, các bạn chọn tab <kbd>Libraries</kbd>.
+      </p>
+      <div class="step-imgs">
+        <figure><img src="imgs/step-2.webp" alt="Chọn tab Libraries trong Wine Configuration" loading="lazy"></figure>
+      </div>
+    </div>
+
+    <div class="step" style="animation-delay:260ms">
+      <div class="step-head">
+        <div class="step-num">3</div>
+        <h2 class="font-heading">Thêm override cho winhttp</h2>
+      </div>
+      <p class="has-img">
+        Ở ô <kbd>New override for library</kbd>, bấm mũi tên xuống rồi tìm <kbd>winhttp</kbd>,
+        hoặc gõ trực tiếp <code>winhttp</code> vào ô, sau đó chọn <kbd>Add</kbd>.
+      </p>
+      <div class="step-imgs two-up">
+        <figure><img src="imgs/step-3a.webp" alt="Chọn mũi tên xuống và tìm winhttp trong danh sách" loading="lazy"></figure>
+        <figure><img src="imgs/step-3b.webp" alt="Bấm Add để thêm override winhttp" loading="lazy"></figure>
+      </div>
+    </div>
+
+    <div class="step" style="animation-delay:310ms">
+      <div class="step-head">
+        <div class="step-num">4</div>
+        <h2 class="font-heading">Áp dụng và chạy game</h2>
+      </div>
+      <p class="has-img">
+        Sau khi <code>winhttp (native, builtin)</code> đã xuất hiện trong danh sách
+        <kbd>Existing overrides</kbd>, chọn <kbd>Apply</kbd> rồi chạy lại game.
+      </p>
+      <div class="step-imgs">
+        <figure><img src="imgs/step-4.webp" alt="Chọn Apply để áp dụng override winhttp" loading="lazy"></figure>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="done" style="animation-delay:360ms">
+    <div class="check">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h3 class="font-heading">Xong! Tiếng Việt đã hiển thị bình thường</h3>
+    <p>Nếu vẫn chưa lên chữ, thử khởi động lại Winlator hoặc kiểm tra lại font trong thư mục game.</p>
+  </div>
+
+  <a href="https://vnsvault.qzz.io" class="back-link">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+    Quay lại VNSVault
+  </a>
+</main>
+
+<!-- ── Footer (mirrors src/components/layout/Footer.tsx) ── -->
+<footer class="site-footer" role="contentinfo">
+  <div class="footer-inner">
+    <div class="footer-grid">
+
+      <div class="footer-col footer-brand">
+        <a href="https://vnsvault.qzz.io" class="footer-logo" aria-label="VNSVault trang chủ">
+          <img src="/logo.png" alt="VNSVault logo">
+          <span>VNSVault</span>
+        </a>
+        <p class="footer-desc">Kho tàng Visual Novel được Việt hóa. Miễn phí, không quảng cáo.</p>
+        <div class="footer-badges">
+          <span class="footer-badge">100% Miễn Phí</span>
+          <span class="footer-badge">Không Ads</span>
+        </div>
+      </div>
+
+      <div class="footer-col">
+        <p class="footer-heading">Nền Tảng</p>
+        <nav aria-label="Footer navigation – Nền tảng">
+          <ul>
+            <li><a href="https://vnsvault.qzz.io/games">Thư Viện Game</a></li>
+            <li><a href="https://vnsvault.qzz.io/games?sort=download_count">Game Hot</a></li>
+            <li><a href="https://vnsvault.qzz.io/games?featured=true">Game Đặc Sắc</a></li>
+            <li><a href="https://vnsvault.qzz.io/requests">Đề Xuất Game</a></li>
+            <li><a href="https://vnsvault.qzz.io/donate">Ủng Hộ Website</a></li>
+          </ul>
+        </nav>
+      </div>
+
+      <div class="footer-col">
+        <p class="footer-heading">Thể Loại</p>
+        <nav aria-label="Footer navigation – Thể loại">
+          <ul>
+            <li><a href="https://vnsvault.qzz.io/games?genre=romance">Romance</a></li>
+            <li><a href="https://vnsvault.qzz.io/games?genre=drama">Drama</a></li>
+            <li><a href="https://vnsvault.qzz.io/games?genre=fantasy">Fantasy</a></li>
+            <li><a href="https://vnsvault.qzz.io/games?genre=horror">Horror</a></li>
+            <li><a href="https://vnsvault.qzz.io/games?genre=sci-fi">Sci-Fi</a></li>
+            <li><a href="https://vnsvault.qzz.io/games?genre=slice-of-life">Slice of Life</a></li>
+          </ul>
+        </nav>
+      </div>
+
+      <div class="footer-col">
+        <p class="footer-heading">Cộng Đồng</p>
+        <nav aria-label="Footer navigation – Cộng đồng">
+          <ul>
+            <li><a href="https://vnsvault.qzz.io/login">Đăng Nhập</a></li>
+            <li><a href="https://vnsvault.qzz.io/register">Tạo Tài Khoản</a></li>
+            <li><a href="https://vnsvault.qzz.io/terms">Điều Khoản</a></li>
+            <li><a href="https://t.me/ZiolKen">Liên Hệ</a></li>
+            <li><a href="mailto:contact@ziolken.qzz.io">Email</a></li>
+          </ul>
+        </nav>
+      </div>
+
+    </div>
+
+    <div class="footer-bottom">
+      <p>© <span id="footer-year">2026</span> VNSVault | All Rights Reserved</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('footer-year').textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { formatDate } from '@/lib/utils';
+import { apiFetch } from '@/lib/apiClient';
 
 interface VipStatus {
   isVip: boolean;
@@ -49,7 +50,7 @@ function UserRow({ user, onUpdated }: { user: AdminUserRow; onUpdated: (u: Admin
   const call = async (body: Record<string, unknown>) => {
     setBusy(true); setErr('');
     try {
-      const r = await fetch(`/api/admin/users/${user.id}/vip`, {
+      const r = await apiFetch(`/api/admin/users/${user.id}/vip`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -134,7 +135,7 @@ export default function AdminUsersPage() {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (f !== 'all') params.set('filter', f);
-    fetch(`/api/admin/users${params.toString() ? `?${params.toString()}` : ''}`)
+    apiFetch(`/api/admin/users${params.toString() ? `?${params.toString()}` : ''}`)
       .then(r => r.json())
       .then(d => {
         if (d?.success) { setUsers(d.data); setFetchError(false); }

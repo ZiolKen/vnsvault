@@ -8,6 +8,7 @@ import { PRESET_AVATARS } from '@/lib/avatars';
 import { canOptimizeImage } from '@/lib/utils';
 import { refreshNavUser } from '@/components/layout/Navbar';
 import type { BookmarkedGameRow } from '@/lib/queries';
+import { apiFetch } from '@/lib/apiClient';
 
 interface UserInfo {
   id: string;
@@ -42,7 +43,7 @@ function AvatarPicker({ user, onUpdated }: { user: UserInfo; onUpdated: (url: st
 
   const save = async (url: string) => {
     setSaving(true); setMsg(''); setErr('');
-    const r = await fetch('/api/account/avatar', {
+    const r = await apiFetch('/api/account/avatar', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ avatarUrl: url }),
@@ -64,7 +65,7 @@ function AvatarPicker({ user, onUpdated }: { user: UserInfo; onUpdated: (url: st
       const body = new FormData();
       body.append('file', file);
       body.append('folder', 'avatars');
-      const r = await fetch('/api/admin/upload', { method: 'POST', body });
+      const r = await apiFetch('/api/admin/upload', { method: 'POST', body });
       const d = await r.json().catch(() => null);
       if (r.ok && d?.success) {
         await save(d.data.url);
@@ -199,7 +200,7 @@ function PasswordForm() {
     if (newPassword.length < 6) { setErr('Mật khẩu mới tối thiểu 6 ký tự.'); return; }
     if (!tsToken) { setErr('Vui lòng hoàn thành xác minh bảo mật.'); return; }
     setSaving(true);
-    const r = await fetch('/api/account/password', {
+    const r = await apiFetch('/api/account/password', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ currentPassword, newPassword, tsToken }),
@@ -263,7 +264,7 @@ function BookmarkList({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/account/bookmarks')
+    apiFetch('/api/account/bookmarks')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.success) setItems(d.data ?? []); })
       .finally(() => setLoading(false));
@@ -271,7 +272,7 @@ function BookmarkList({ userId }: { userId: string }) {
 
   const remove = (gameId: string, slug: string) => {
     setItems(prev => prev.filter(i => i.game_id !== gameId));
-    fetch(`/api/games/${slug}/bookmark`, { method: 'POST' }).catch(() => {});
+    apiFetch(`/api/games/${slug}/bookmark`, { method: 'POST' }).catch(() => {});
   };
 
   if (loading) return (

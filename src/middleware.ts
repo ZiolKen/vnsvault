@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, COOKIE_NAME } from '@/lib/jwt';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
 import { isMaintenanceOn } from '@/lib/maintenance';
+import { isTrustedOrigin, corsHeaders, CORS_PREFLIGHT_HEADERS } from '@/lib/corsConfig';
 
 const PROTECTED = ['/admin', '/myaccount'];
 
@@ -109,11 +110,43 @@ function withPrivateHeaders(res: NextResponse): NextResponse {
   return res;
 }
 
+/**
+ * Stamps CORS headers onto a response IF the request's Origin is in the
+ * primary↔backup allowlist (see lib/corsConfig.ts). No-op for everyone
+ * else — same-origin requests don't need these headers, and untrusted
+ * cross-origin requests never reach here for unsafe methods (blocked
+ * earlier) and gain nothing from reading a GET response without them.
+ */
+function withCors(res: NextResponse, req: NextRequest): NextResponse {
+  const origin = req.headers.get('origin');
+  if (isTrustedOrigin(origin)) {
+    for (const [k, v] of Object.entries(corsHeaders(origin))) res.headers.set(k, v);
+  }
+  return res;
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (BLOCKED_PATH_PATTERNS.some(pattern => pattern.test(pathname))) {
     return new NextResponse(null, { status: 404 });
+  }
+
+  // ── CORS preflight for the trusted primary↔backup pair ─────────────
+  // Answered before maintenance/rate-limit/auth: a preflight carries no
+  // cookies and triggers none of those checks in the real request anyway,
+  // so doing DB/Redis work here would just be wasted CPU on every
+  // cross-origin call (each real request is preceded by one of these).
+  if (pathname.startsWith('/api/') && req.method === 'OPTIONS') {
+    const origin = req.headers.get('origin');
+    if (isTrustedOrigin(origin)) {
+      return new NextResponse(null, {
+        status: 204,
+        headers: { ...corsHeaders(origin), ...CORS_PREFLIGHT_HEADERS },
+      });
+    }
+    // Untrusted/no origin — not a real cross-site preflight we support,
+    // fall through to normal handling (will 404/405 downstream as before).
   }
 
   // ── Maintenance mode ────────────────────────────────────────────────
@@ -129,10 +162,10 @@ export async function middleware(req: NextRequest) {
 
     if (session?.role !== 'admin') {
       if (pathname.startsWith('/api/')) {
-        return NextResponse.json(
+        return withCors(NextResponse.json(
           { success: false, error: 'Website đang bảo trì, vui lòng quay lại sau.' },
           { status: 503, headers: { 'Retry-After': '3600' } }
-        );
+        ), req);
       }
       const url = req.nextUrl.clone();
       url.pathname = '/maintenance';
@@ -148,8 +181,13 @@ export async function middleware(req: NextRequest) {
   }
 
   const isApiRoute = pathname.startsWith('/api/');
+  const originHeader = req.headers.get('origin');
+  const trustedCrossOrigin = isTrustedOrigin(originHeader);
 
-  if (isApiRoute && UNSAFE_METHODS.has(req.method) && !isSameOrigin(req)) {
+  // Same-origin OR explicitly trusted (the backup mirror calling us, or us
+  // calling it) passes. Everyone else attempting an unsafe cross-site
+  // write still gets rejected exactly as before.
+  if (isApiRoute && UNSAFE_METHODS.has(req.method) && !isSameOrigin(req) && !trustedCrossOrigin) {
     return NextResponse.json({ success: false, error: 'Nguồn yêu cầu không hợp lệ.' }, { status: 403 });
   }
 
@@ -162,17 +200,17 @@ export async function middleware(req: NextRequest) {
         max: limitRule.max,
       });
       if (!success) {
-        return NextResponse.json(
+        return withCors(NextResponse.json(
           { success: false, error: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' },
           { status: 429, headers: retryAfterSeconds ? { 'Retry-After': String(retryAfterSeconds) } : undefined }
-        );
+        ), req);
       }
     }
   }
 
   const isProtected = PROTECTED.some(p => pathname.startsWith(p));
   if (!isProtected) {
-    return NextResponse.next();
+    return isApiRoute ? withCors(NextResponse.next(), req) : NextResponse.next();
   }
 
   const token = req.cookies.get(COOKIE_NAME)?.value;

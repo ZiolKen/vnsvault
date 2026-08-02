@@ -7,6 +7,7 @@ import FormField from '@/components/ui/FormField';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { canOptimizeImage } from '@/lib/utils';
+import { apiFetch } from '@/lib/apiClient';
 
 interface DownloadEntry { version: string; platform: string; url: string; label: string; }
 
@@ -60,7 +61,7 @@ function ImageUploadField({ label, value, onChange }: {
       const body = new FormData();
       body.append('file', file);
       body.append('folder', 'games');
-      const r = await fetch('/api/admin/upload', { method: 'POST', body });
+      const r = await apiFetch('/api/admin/upload', { method: 'POST', body });
       const d = await r.json().catch(() => null);
       if (r.ok && d?.success) {
         onChange(d.data.url);
@@ -141,7 +142,7 @@ export default function GameForm({ initial, gameId }: Props) {
   // hardcoded list, because shards seeded before explicit-ID pinning may
   // have different SERIAL-assigned IDs that don't match any static constant.
   useEffect(() => {
-    fetch('/api/genres')
+    apiFetch('/api/genres')
       .then(r => r.json())
       .then(d => { if (d.success) setAllGenres(d.data); })
       .catch(() => { /* silently fall through; genres section shows empty */ })

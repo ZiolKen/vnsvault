@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { TurnstileWidget } from '@/components/ui/TurnstileWidget';
 import FormField from '@/components/ui/FormField';
 import Button from '@/components/ui/Button';
+import { apiFetch } from '@/lib/apiClient';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -18,7 +19,7 @@ export default function ForgotPasswordPage() {
     setError('');
     setLoading(true);
     try {
-      const r = await fetch('/api/auth/forgot-password', {
+      const r = await apiFetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, tsToken }),

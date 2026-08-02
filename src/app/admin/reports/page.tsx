@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { reportStatusLabel, reportStatusColor, platformLabel, formatDate } from '@/lib/utils';
 import type { LinkReport, ReportStatus } from '@/types';
+import { apiFetch } from '@/lib/apiClient';
 
 export default function AdminReportsPage() {
   const [reports, setReports] = useState<LinkReport[]>([]);
@@ -13,7 +14,7 @@ export default function AdminReportsPage() {
 
   const load = () => {
     setLoading(true);
-    fetch('/api/admin/reports')
+    apiFetch('/api/admin/reports')
       .then(r => r.json())
       .then(d => {
         if (d?.success) { setReports(d.data); setFetchError(false); }
@@ -28,7 +29,7 @@ export default function AdminReportsPage() {
   const setStatus = async (id: string, status: ReportStatus) => {
     setBusyId(id);
     try {
-      const r = await fetch(`/api/admin/reports/${id}`, {
+      const r = await apiFetch(`/api/admin/reports/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -50,7 +51,7 @@ export default function AdminReportsPage() {
     if (!confirm('Xóa báo cáo này? Hành động này không thể hoàn tác.')) return;
     setBusyId(id);
     try {
-      const r = await fetch(`/api/admin/reports/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/admin/reports/${id}`, { method: 'DELETE' });
       if (r.ok) {
         setReports(prev => prev.filter(rep => rep.id !== id));
       } else {

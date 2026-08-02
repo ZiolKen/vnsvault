@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { statusLabel, statusColor, formatNumber, formatDate } from '@/lib/utils';
 import type { Game } from '@/types';
+import { apiFetch } from '@/lib/apiClient';
 
 export default function AdminGamesPage() {
   const [games, setGames] = useState<Game[]>([]);
@@ -11,14 +12,14 @@ export default function AdminGamesPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    fetch('/api/admin/games')
+    apiFetch('/api/admin/games')
       .then(r => r.json())
       .then(d => d.success && setGames(d.data))
       .finally(() => setLoading(false));
   }, []);
 
   const togglePublish = async (game: Game) => {
-    const r = await fetch(`/api/admin/games/${game.id}`, {
+    const r = await apiFetch(`/api/admin/games/${game.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ published: !game.published }),
@@ -29,7 +30,7 @@ export default function AdminGamesPage() {
   const deleteGame = async (id: string, title: string) => {
     if (!confirm(`Xóa game "${title}"? Hành động này không thể hoàn tác.`)) return;
     setDeleting(id);
-    const r = await fetch(`/api/admin/games/${id}`, { method: 'DELETE' });
+    const r = await apiFetch(`/api/admin/games/${id}`, { method: 'DELETE' });
     if (r.ok) setGames(prev => prev.filter(g => g.id !== id));
     setDeleting(null);
   };

@@ -8,6 +8,7 @@ import FormField from '@/components/ui/FormField';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { refreshNavUser } from '@/components/layout/Navbar';
+import { apiFetch } from '@/lib/apiClient';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ username: '', email: '', password: '' });
@@ -24,7 +25,7 @@ export default function RegisterPage() {
     if (form.password.length < 6) { setError('Mật khẩu cần ít nhất 6 ký tự'); return; }
     setLoading(true);
     try {
-      const r = await fetch('/api/auth/register', {
+      const r = await apiFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, tsToken }),

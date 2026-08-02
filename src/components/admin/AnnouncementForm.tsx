@@ -5,6 +5,7 @@ import { useToast } from '@/components/ui/Toast';
 import AnnouncementBody from '@/components/announcement/AnnouncementBody';
 import { refreshAnnouncement } from '@/components/layout/AnnouncementModal';
 import type { Announcement, AnnouncementParagraph, AnnouncementSegment, AnnouncementTone } from '@/types';
+import { apiFetch } from '@/lib/apiClient';
 
 // Editor-local segment shape — always has every field present (unlike the
 // stored/API shape where bold/tone/href are optional) so controlled inputs
@@ -72,7 +73,7 @@ export default function AnnouncementForm() {
   const [version, setVersion] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch('/api/admin/announcement')
+    apiFetch('/api/admin/announcement')
       .then(r => r.json())
       .then(d => {
         if (d?.success && d.data) {
@@ -113,7 +114,7 @@ export default function AnnouncementForm() {
 
     setSaving(true);
     try {
-      const r = await fetch('/api/admin/announcement', {
+      const r = await apiFetch('/api/admin/announcement', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled, title, snoozeHours, body: payloadBody }),

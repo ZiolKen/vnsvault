@@ -26,6 +26,17 @@ const SECRET = new TextEncoder().encode(
 export const COOKIE_NAME = 'vnsvault_session';
 export const EXPIRES_IN  = 7 * 24 * 60 * 60; // 7 days in seconds
 
+// Set to a shared parent domain (e.g. '.vnsvault.com') on BOTH the primary
+// and backup deployments so the session cookie is sent to whichever origin
+// the browser is calling — required for the cross-account API fallback
+// (see docs/FALLBACK_DEPLOYMENT.md). Leave unset for normal single-deploy
+// operation: the cookie then defaults to the exact host, same as before.
+// Subdomains of the same registrable domain are "same-site" (SameSite=Lax
+// still sends the cookie there), so this alone does NOT require SameSite
+// to be loosened to 'none' — only CORS (see middleware.ts) needs handling
+// separately, since same-site ≠ same-origin.
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
+
 export async function createToken(payload: Omit<SessionPayload, 'exp'>): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
@@ -63,12 +74,25 @@ export function setSessionCookie(res: NextResponse, token: string): NextResponse
     sameSite: 'lax',
     maxAge:   EXPIRES_IN,
     path:     '/',
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
   });
   return res;
 }
 
 export function clearSessionCookie(res: NextResponse): NextResponse {
-  res.cookies.delete(COOKIE_NAME);
+  // Deliberately NOT res.cookies.delete() — deletion only works if the
+  // Domain attribute matches the cookie being cleared exactly. When
+  // COOKIE_DOMAIN is set, delete() would issue a host-only clear that the
+  // browser won't match against the domain-scoped cookie, leaving a
+  // logged-out user still holding a live session cookie.
+  res.cookies.set(COOKIE_NAME, '', {
+    httpOnly: true,
+    secure:   process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge:   0,
+    path:     '/',
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
+  });
   return res;
 }
 

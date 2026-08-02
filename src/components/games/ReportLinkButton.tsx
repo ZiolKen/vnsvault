@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { TurnstileWidget } from '@/components/ui/TurnstileWidget';
 import { platformLabel } from '@/lib/utils';
 import type { Platform } from '@/types';
+import { apiFetch } from '@/lib/apiClient';
 
 interface DownloadOption {
   id: string;
@@ -59,7 +60,7 @@ export default function ReportLinkButton({ gameSlug, gameTitle, downloads, varia
     setSubmitting(true);
     setError('');
     try {
-      const r = await fetch(`/api/games/${gameSlug}/report-link`, {
+      const r = await apiFetch(`/api/games/${gameSlug}/report-link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ downloadId: downloadId || undefined, reason: reason.trim() || undefined, tsToken }),

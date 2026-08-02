@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/jwt';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 /**
  * ★ JWT-only — no DB call ★

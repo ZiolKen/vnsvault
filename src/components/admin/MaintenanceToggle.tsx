@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { apiFetch } from '@/lib/apiClient';
 
 export default function MaintenanceToggle() {
   const toast = useToast();
@@ -10,7 +11,7 @@ export default function MaintenanceToggle() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch('/api/admin/maintenance')
+    apiFetch('/api/admin/maintenance')
       .then(r => r.json())
       .then(d => { if (d.success) setEnabled(d.data.enabled); })
       .catch(() => toast.push('Không thể tải trạng thái bảo trì', 'error'))
@@ -22,7 +23,7 @@ export default function MaintenanceToggle() {
     const next = !enabled;
     setSaving(true);
     try {
-      const r = await fetch('/api/admin/maintenance', {
+      const r = await apiFetch('/api/admin/maintenance', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: next }),

@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/apiClient';
 
 interface Props {
   gameSlug: string;
@@ -27,7 +28,7 @@ export default function BookmarkButton({ gameSlug, initialBookmarked, loggedIn, 
     const next = !bookmarked;
     setBookmarked(next); // optimistic
     try {
-      const r = await fetch(`/api/games/${gameSlug}/bookmark`, { method: 'POST' });
+      const r = await apiFetch(`/api/games/${gameSlug}/bookmark`, { method: 'POST' });
       const d = await r.json().catch(() => null);
       if (!r.ok || !d?.success) {
         setBookmarked(!next); // revert on failure

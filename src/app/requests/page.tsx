@@ -5,6 +5,7 @@ import { TurnstileWidget } from '@/components/ui/TurnstileWidget';
 import VoteModal from '@/components/requests/VoteModal';
 import type { GameRequest } from '@/types';
 import { formatDate } from '@/lib/utils';
+import { apiFetch } from '@/lib/apiClient';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending:     { label: 'Chờ duyệt', color: 'bg-yellow-400/10 text-yellow-400 border-yellow-400/30' },
@@ -37,7 +38,7 @@ export default function RequestsPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch('/api/requests')
+    apiFetch('/api/requests')
       .then(r => r.json())
       .then(d => {
         if (d?.success) { setRequests(d.data); setFetchError(false); }
@@ -54,7 +55,7 @@ export default function RequestsPage() {
 
   const vote = async (id: string, tsToken: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const r = await fetch(`/api/requests/${id}/vote`, {
+      const r = await apiFetch(`/api/requests/${id}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tsToken }),
@@ -83,7 +84,7 @@ export default function RequestsPage() {
     if (!submitTsToken) { showToast('Vui lòng hoàn thành xác minh bên dưới'); return; }
     setSubmitting(true);
     try {
-      const r = await fetch('/api/requests', {
+      const r = await apiFetch('/api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, tsToken: submitTsToken }),

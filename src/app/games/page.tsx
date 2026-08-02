@@ -6,6 +6,7 @@ import GameCard from '@/components/games/GameCard';
 import { SkeletonCardGrid } from '@/components/ui/SkeletonCard';
 import Link from 'next/link';
 import type { Game } from '@/types';
+import { apiFetch } from '@/lib/apiClient';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Tất cả' },
@@ -162,7 +163,7 @@ function GamesContent() {
   const loadingRef = useRef(false);
 
   useEffect(() => {
-    fetch('/api/genres')
+    apiFetch('/api/genres')
       .then(r => r.json())
       .then(d => { if (d.success) setAllGenres(d.data); })
       .catch(() => { /* tag search just shows no suggestions */ });
@@ -223,7 +224,7 @@ function GamesContent() {
     params.set('page', String(page));
     params.set('pageSize', '12');
 
-    fetch(`/api/games?${params}`)
+    apiFetch(`/api/games?${params}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d?.success) {

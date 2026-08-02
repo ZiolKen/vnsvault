@@ -7,6 +7,7 @@ import { TurnstileWidget } from '@/components/ui/TurnstileWidget';
 import FormField from '@/components/ui/FormField';
 import Button from '@/components/ui/Button';
 import { refreshNavUser } from '@/components/layout/Navbar';
+import { apiFetch } from '@/lib/apiClient';
 
 function LoginForm() {
   const [form, setForm] = useState({ identifier: '', password: '' });
@@ -23,7 +24,7 @@ function LoginForm() {
     setError('');
     setLoading(true);
     try {
-      const r = await fetch('/api/auth/login', {
+      const r = await apiFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, tsToken }),

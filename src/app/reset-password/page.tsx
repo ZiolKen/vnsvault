@@ -7,6 +7,7 @@ import { TurnstileWidget } from '@/components/ui/TurnstileWidget';
 import FormField from '@/components/ui/FormField';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { apiFetch } from '@/lib/apiClient';
 
 function ResetPasswordForm() {
   const [form, setForm] = useState({ password: '', confirm: '' });
@@ -36,7 +37,7 @@ function ResetPasswordForm() {
     }
     setLoading(true);
     try {
-      const r = await fetch('/api/auth/reset-password', {
+      const r = await apiFetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password: form.password, tsToken }),

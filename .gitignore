@@ -56,3 +56,5 @@ next-env.d.ts
 *.pem
 *.key
 *.cert
+.vercel
+.env*

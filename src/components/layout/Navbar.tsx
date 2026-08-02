@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { canOptimizeImage } from '@/lib/utils';
+import { apiFetch } from '@/lib/apiClient';
 
 interface NavUser { username: string; role: string; avatar_url?: string; }
 
@@ -65,7 +66,7 @@ export default function Navbar() {
     // failures a couple times before giving up silently.
     async function loadUser(attempt = 0) {
       try {
-        const r = await fetch('/api/auth/me', { cache: 'no-store', signal: controller.signal });
+        const r = await apiFetch('/api/auth/me', { cache: 'no-store', signal: controller.signal });
         if (r.status === 401) {
           if (!cancelled) setUser(null); // definitively not logged in
           return;
@@ -100,7 +101,7 @@ export default function Navbar() {
   }, []);
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await apiFetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
     setUserMenuOpen(false);
     router.refresh();

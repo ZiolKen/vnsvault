@@ -5,6 +5,7 @@ import Modal from '@/components/ui/Modal';
 import AnnouncementBody from '@/components/announcement/AnnouncementBody';
 import { getAnnouncementDismissal, isDismissalActive, setAnnouncementDismissal } from '@/lib/announcementStore';
 import type { Announcement } from '@/types';
+import { apiFetch } from '@/lib/apiClient';
 
 /**
  * Site-wide announcement popup — content is fully editable from
@@ -53,7 +54,7 @@ export default function AnnouncementModal() {
 
     async function load() {
       try {
-        const res = await fetch('/api/announcement', { cache: 'no-store' });
+        const res = await apiFetch('/api/announcement', { cache: 'no-store' });
         const json = await res.json();
         if (cancelled || !json?.success || !json.data) return;
 

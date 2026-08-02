@@ -42,7 +42,10 @@ export async function POST(
     // in schema.sql.
     await db.withRowTransaction('games', 'slug', slug, async (client) => {
       const gameRes = await client.query<{ id: string }>('SELECT id FROM games WHERE slug=$1', [slug]);
-      const gameId = gameRes.rows[0].id;
+      const gameId = gameRes.rows[0]?.id;
+      if (!gameId) {
+        throw new RowNotFoundError('games', 'slug', slug);
+      }
 
       // If a specific download was flagged, confirm it actually belongs to
       // THIS game (co-located on this same shard) before linking it —

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { requestStatusLabel, requestStatusColor, formatDate } from '@/lib/utils';
 import type { GameRequest, RequestStatus } from '@/types';
+import { apiFetch } from '@/lib/apiClient';
 
 const STATUS_OPTIONS: RequestStatus[] = ['pending', 'approved', 'in_progress', 'rejected'];
 
@@ -14,7 +15,7 @@ export default function AdminRequestsPage() {
 
   const load = () => {
     setLoading(true);
-    fetch('/api/admin/requests')
+    apiFetch('/api/admin/requests')
       .then(r => r.json())
       .then(d => {
         if (d?.success) { setRequests(d.data); setFetchError(false); }
@@ -29,7 +30,7 @@ export default function AdminRequestsPage() {
   const updateStatus = async (id: string, status: RequestStatus) => {
     setBusyId(id);
     try {
-      const r = await fetch(`/api/admin/requests/${id}`, {
+      const r = await apiFetch(`/api/admin/requests/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -51,7 +52,7 @@ export default function AdminRequestsPage() {
     if (!confirm(`Xóa đề xuất "${title}"? Hành động này không thể hoàn tác.`)) return;
     setBusyId(id);
     try {
-      const r = await fetch(`/api/admin/requests/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/admin/requests/${id}`, { method: 'DELETE' });
       if (r.ok) {
         setRequests(prev => prev.filter(req => req.id !== id));
       } else {

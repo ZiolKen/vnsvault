@@ -1,5 +1,11 @@
 import type { NextConfig } from 'next';
 
+// Cross-account API mirror (see src/lib/apiClient.ts + docs/FALLBACK_DEPLOYMENT.md).
+// Must be added to connect-src or the browser's CSP blocks apiFetch's
+// cross-origin call before it ever leaves the page — independent of, and
+// checked before, any CORS headers the fallback origin itself returns.
+const FALLBACK_ORIGIN = (process.env.NEXT_PUBLIC_FALLBACK_ORIGIN ?? '').replace(/\/$/, '');
+
 const CSP = [
   "default-src 'self'",
   // Next.js needs 'unsafe-inline' for styled-jsx/inline bootstrap scripts
@@ -9,7 +15,7 @@ const CSP = [
   "img-src 'self' data: blob: https:",
   "font-src 'self'",
   "frame-src https://challenges.cloudflare.com",
-  "connect-src 'self' https://www.google-analytics.com https://challenges.cloudflare.com",
+  `connect-src 'self' https://www.google-analytics.com https://challenges.cloudflare.com${FALLBACK_ORIGIN ? ` ${FALLBACK_ORIGIN}` : ''}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

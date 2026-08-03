@@ -31,38 +31,53 @@ const PRIMARY_TIMEOUT_MS = 8_000;
  * point every `/api/...` call at the mirror (to verify it's healthy before
  * relying on it) or pin calls to the primary (to rule out the mirror while
  * debugging) without waiting for `looksLikePlatformFailure` to trigger on
- * its own. Persisted in localStorage so it survives reloads and stays the
- * same across tabs; 'auto' restores the normal automatic failover above.
+ * its own.
+ *
+ * Stored in Redis (see lib/apiOrigin.ts + PUT /api/admin/api-origin) so the
+ * switch is GLOBAL — same idea as the maintenance-mode toggle: one admin
+ * flips it, every visitor's browser picks it up, not just the admin's own
+ * tab/device. Each tab keeps a short-TTL in-memory cache of the last read
+ * (mirroring lib/maintenance.ts's Edge-side cache) so this doesn't cost a
+ * Redis round trip on every single `/api/...` call — only once per
+ * `OVERRIDE_CACHE_TTL_MS` per tab.
  */
 export type ApiOriginMode = 'auto' | 'primary' | 'fallback';
-const ORIGIN_OVERRIDE_KEY = 'vnsvault:api-origin-override';
-const ORIGIN_OVERRIDE_EVENT = 'vnsvault:api-origin-override-change';
+const OVERRIDE_CACHE_TTL_MS = 5_000;
+let overrideCache: { mode: ApiOriginMode; expiresAt: number } | null = null;
 
-export function getApiOriginOverride(): ApiOriginMode {
-  if (typeof window === 'undefined') return 'auto';
-  const stored = window.localStorage.getItem(ORIGIN_OVERRIDE_KEY);
-  return stored === 'primary' || stored === 'fallback' ? stored : 'auto';
-}
-
-export function setApiOriginOverride(mode: ApiOriginMode): void {
-  if (typeof window === 'undefined') return;
-  if (mode === 'auto') {
-    window.localStorage.removeItem(ORIGIN_OVERRIDE_KEY);
-  } else {
-    window.localStorage.setItem(ORIGIN_OVERRIDE_KEY, mode);
+async function fetchApiOriginMode(): Promise<ApiOriginMode> {
+  try {
+    // Plain fetch — always same-origin, deliberately NOT routed through
+    // apiFetch/fetchFromFallback itself (that would be self-referential,
+    // and would mean a broken fallback could never be read/turned back
+    // off once selected). Any failure here just fails open to 'auto',
+    // which still leaves the normal automatic failover below intact.
+    const res = await fetch('/api/api-origin', { cache: 'no-store' });
+    if (!res.ok) return 'auto';
+    const body = await res.json() as { success?: boolean; data?: { mode?: unknown } };
+    const mode = body?.data?.mode;
+    return mode === 'primary' || mode === 'fallback' ? mode : 'auto';
+  } catch {
+    return 'auto';
   }
-  window.dispatchEvent(new Event(ORIGIN_OVERRIDE_EVENT));
 }
 
-/** Fires whenever the override changes — from this tab or (via `storage`) another one. */
-export function onApiOriginOverrideChange(cb: () => void): () => void {
-  if (typeof window === 'undefined') return () => {};
-  window.addEventListener(ORIGIN_OVERRIDE_EVENT, cb);
-  window.addEventListener('storage', cb);
-  return () => {
-    window.removeEventListener(ORIGIN_OVERRIDE_EVENT, cb);
-    window.removeEventListener('storage', cb);
-  };
+async function getApiOriginOverride(): Promise<ApiOriginMode> {
+  if (typeof window === 'undefined') return 'auto';
+  if (overrideCache && overrideCache.expiresAt > Date.now()) return overrideCache.mode;
+  const mode = await fetchApiOriginMode();
+  overrideCache = { mode, expiresAt: Date.now() + OVERRIDE_CACHE_TTL_MS };
+  return mode;
+}
+
+/**
+ * Lets the Admin Dashboard's toggle apply its own change to THIS tab
+ * immediately after a successful PUT, instead of waiting out
+ * OVERRIDE_CACHE_TTL_MS — purely a same-tab UX nicety; other tabs/users
+ * still pick it up via the TTL above once Redis has the new value.
+ */
+export function primeApiOriginOverride(mode: ApiOriginMode): void {
+  overrideCache = { mode, expiresAt: Date.now() + OVERRIDE_CACHE_TTL_MS };
 }
 
 /**
@@ -122,7 +137,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   // primary call entirely (so a broken primary can't still eat the
   // timeout first), 'primary' skips the automatic failover so a flaky
   // mirror can be ruled out while debugging.
-  const override = getApiOriginOverride();
+  const override = await getApiOriginOverride();
   if (override === 'fallback') {
     return fetchFromFallback(path, init);
   }

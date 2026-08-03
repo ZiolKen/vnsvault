@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const game = await getGame(slug);
   if (!game) return { title: 'Không tìm thấy game', robots: { index: false } };
   const desc = game.description?.replace(/\s+/g, ' ').slice(0, 160) ?? `"${game.title}" được Việt hóa tại VNSVault.`;
-  const image = game.cover_url || game.banner_url;
+  const image = game.banner_url || game.cover_url;
   const url = `${BASE}/games/${slug}`;
   return {
     title: game.title, description: desc,

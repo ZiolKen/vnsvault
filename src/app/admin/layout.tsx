@@ -2,14 +2,14 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/jwt';
 import AdminLayoutClient from './AdminLayoutClient';
 
-export const metadata = { title: 'Admin Panel | VNSVault' };
+export const metadata = { title: 'Admin Panel' };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session || session.role !== 'admin') redirect('/login');
 
   return (
-    <AdminLayoutClient username={session.username}>
+    <AdminLayoutClient username={session.username} avatarUrl={session.avatar_url ?? null}>
       {children}
     </AdminLayoutClient>
   );

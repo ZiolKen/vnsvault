@@ -5,7 +5,7 @@ import { computeVipStatus } from '@/lib/vip';
 import type { Metadata } from 'next';
 import MyAccountClient from './MyAccountClient';
 
-export const metadata: Metadata = { title: 'Tài Khoản Của Tôi | VNSVault' };
+export const metadata: Metadata = { title: 'Tài Khoản Của Tôi' };
 
 export default async function MyAccountPage() {
   const session = await getSession();

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Đang Bảo Trì | VNSVault',
+  title: 'Đang Bảo Trì',
   robots: { index: false, follow: false },
 };
 

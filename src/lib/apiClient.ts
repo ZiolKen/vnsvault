@@ -26,6 +26,46 @@ const FALLBACK_ORIGIN = (process.env.NEXT_PUBLIC_FALLBACK_ORIGIN ?? '').replace(
 const PRIMARY_TIMEOUT_MS = 8_000;
 
 /**
+ * Manual override for which origin `apiFetch` targets, set from the "Primary
+ * / Fallback" switch in the Admin Dashboard. Lets an admin deliberately
+ * point every `/api/...` call at the mirror (to verify it's healthy before
+ * relying on it) or pin calls to the primary (to rule out the mirror while
+ * debugging) without waiting for `looksLikePlatformFailure` to trigger on
+ * its own. Persisted in localStorage so it survives reloads and stays the
+ * same across tabs; 'auto' restores the normal automatic failover above.
+ */
+export type ApiOriginMode = 'auto' | 'primary' | 'fallback';
+const ORIGIN_OVERRIDE_KEY = 'vnsvault:api-origin-override';
+const ORIGIN_OVERRIDE_EVENT = 'vnsvault:api-origin-override-change';
+
+export function getApiOriginOverride(): ApiOriginMode {
+  if (typeof window === 'undefined') return 'auto';
+  const stored = window.localStorage.getItem(ORIGIN_OVERRIDE_KEY);
+  return stored === 'primary' || stored === 'fallback' ? stored : 'auto';
+}
+
+export function setApiOriginOverride(mode: ApiOriginMode): void {
+  if (typeof window === 'undefined') return;
+  if (mode === 'auto') {
+    window.localStorage.removeItem(ORIGIN_OVERRIDE_KEY);
+  } else {
+    window.localStorage.setItem(ORIGIN_OVERRIDE_KEY, mode);
+  }
+  window.dispatchEvent(new Event(ORIGIN_OVERRIDE_EVENT));
+}
+
+/** Fires whenever the override changes — from this tab or (via `storage`) another one. */
+export function onApiOriginOverrideChange(cb: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener(ORIGIN_OVERRIDE_EVENT, cb);
+  window.addEventListener('storage', cb);
+  return () => {
+    window.removeEventListener(ORIGIN_OVERRIDE_EVENT, cb);
+    window.removeEventListener('storage', cb);
+  };
+}
+
+/**
  * Statuses that, on THIS app's API, only ever come from Vercel's own edge
  * (a paused/exhausted deployment) rather than a route handler — none of
  * our routes intentionally return these. 402/403 cover Vercel's own
@@ -75,6 +115,18 @@ async function fetchFromFallback(path: string, init: RequestInit): Promise<Respo
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   if (!FALLBACK_ORIGIN) {
     // No mirror configured — behave exactly like a normal fetch.
+    return fetch(path, init);
+  }
+
+  // Manual override wins over automatic detection: 'fallback' skips the
+  // primary call entirely (so a broken primary can't still eat the
+  // timeout first), 'primary' skips the automatic failover so a flaky
+  // mirror can be ruled out while debugging.
+  const override = getApiOriginOverride();
+  if (override === 'fallback') {
+    return fetchFromFallback(path, init);
+  }
+  if (override === 'primary') {
     return fetch(path, init);
   }
 

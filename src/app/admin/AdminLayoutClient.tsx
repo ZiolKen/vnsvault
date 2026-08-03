@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { canOptimizeImage } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { href: '/admin',           label: '📊 Dashboard' },
@@ -15,7 +16,15 @@ const NAV_ITEMS = [
   { href: '/admin/maintenance', label: '🚧 Bảo Trì' },
 ];
 
-function SidebarContent({ username, onClose }: { username: string; onClose?: () => void }) {
+function SidebarContent({
+  username,
+  avatarUrl,
+  onClose,
+}: {
+  username: string;
+  avatarUrl: string | null;
+  onClose?: () => void;
+}) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === '/admin' ? pathname === '/admin' : pathname.startsWith(href);
@@ -64,8 +73,10 @@ function SidebarContent({ username, onClose }: { username: string; onClose?: () 
       {/* User avatar */}
       <div className="p-3 border-t border-border">
         <div className="flex items-center gap-2 px-3 py-2">
-          <span className="w-7 h-7 rounded-full bg-copper/20 flex items-center justify-center text-copper-light text-xs font-bold shrink-0">
-            {username[0].toUpperCase()}
+          <span className="w-7 h-7 rounded-full bg-copper/20 flex items-center justify-center text-copper-light text-xs font-bold overflow-hidden shrink-0" aria-hidden="true">
+            {avatarUrl
+              ? <Image src={avatarUrl} alt="" width={28} height={28} unoptimized={!canOptimizeImage(avatarUrl)} className="object-cover w-full h-full" />
+              : username[0].toUpperCase()}
           </span>
           <span className="text-xs text-ghost-dim truncate">{username}</span>
         </div>
@@ -77,9 +88,11 @@ function SidebarContent({ username, onClose }: { username: string; onClose?: () 
 export default function AdminLayoutClient({
   children,
   username,
+  avatarUrl,
 }: {
   children: React.ReactNode;
   username: string;
+  avatarUrl: string | null;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
@@ -94,7 +107,7 @@ export default function AdminLayoutClient({
     <div className="min-h-screen flex bg-obsidian">
       {/* Desktop sidebar (md+) */}
       <aside className="hidden md:flex md:flex-col w-56 shrink-0 bg-vault border-r border-border pt-16">
-        <SidebarContent username={username} />
+        <SidebarContent username={username} avatarUrl={avatarUrl} />
       </aside>
 
       {/* Mobile: overlay */}
@@ -112,7 +125,7 @@ export default function AdminLayoutClient({
         aria-hidden={!drawerOpen}
         role="dialog"
       >
-        <SidebarContent username={username} onClose={() => setDrawerOpen(false)} />
+        <SidebarContent username={username} avatarUrl={avatarUrl} onClose={() => setDrawerOpen(false)} />
       </aside>
 
       {/* Content */}

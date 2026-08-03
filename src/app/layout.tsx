@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import Script from 'next/script';
 import Navbar from '@/components/layout/Navbar';
+import SelfXssWarning from '@/components/SelfXssWarning';
 import Footer from '@/components/layout/Footer';
 import VipAnnouncementBar from '@/components/layout/VipAnnouncementBar';
 import AnnouncementModal from '@/components/layout/AnnouncementModal';
@@ -194,6 +195,7 @@ gtag('config', '${GA_ID}');`}
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] btn-copper text-sm">
           Bỏ qua điều hướng
         </a>
+        <SelfXssWarning />
         <Navbar />
         <VipAnnouncementBar />
         <AnnouncementModal />

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
+import ApiOriginToggle from '@/components/admin/ApiOriginToggle';
 
 async function getStats() {
   try {
@@ -55,6 +56,8 @@ export default async function AdminDashboard() {
         <h1 className="font-cinzel text-2xl font-bold text-ghost">Dashboard</h1>
         <p className="text-ghost-dim text-sm mt-1">Tổng quan VNSVault</p>
       </div>
+
+      <ApiOriginToggle />
 
       {dbError && (
         <div className="mb-6 flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm">

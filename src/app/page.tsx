@@ -135,6 +135,34 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {/* ── New Arrivals ────────────────────────────────── */}
+        {newGames.length > 0 && (
+          <section className="max-w-7xl mx-auto px-4 pb-14 sm:pb-16 w-full" aria-labelledby="new-heading">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <div className="flex items-center gap-2 mb-1" aria-hidden="true">
+                  <span className="w-5 h-px bg-copper" />
+                  <span className="text-xs uppercase tracking-widest text-copper-light font-semibold">Mới Cập Nhật</span>
+                </div>
+                <h2 id="new-heading" className="font-heading text-xl sm:text-2xl font-bold text-ghost">Mới Thêm Vào Kho</h2>
+              </div>
+              <Link href="/games?sort=created_at" className="text-sm text-ghost-dim hover:text-copper-light transition-colors">
+                Xem tất cả →
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+              {newGames.map((g, i) => (
+                <GameCard
+                  key={g.id}
+                  game={g}
+                  className="stagger-child"
+                  style={{ '--stagger-index': i } as CSSProperties}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── Hot Rankings ────────────────────────────────── */}
         {hotGames.length > 0 && (
           <section className="max-w-7xl mx-auto px-4 py-14 sm:py-16 w-full" aria-labelledby="hot-heading">
@@ -203,34 +231,6 @@ export default async function HomePage() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
               {featuredGames.map((g, i) => (
-                <GameCard
-                  key={g.id}
-                  game={g}
-                  className="stagger-child"
-                  style={{ '--stagger-index': i } as CSSProperties}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── New Arrivals ────────────────────────────────── */}
-        {newGames.length > 0 && (
-          <section className="max-w-7xl mx-auto px-4 pb-14 sm:pb-16 w-full" aria-labelledby="new-heading">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <div className="flex items-center gap-2 mb-1" aria-hidden="true">
-                  <span className="w-5 h-px bg-copper" />
-                  <span className="text-xs uppercase tracking-widest text-copper-light font-semibold">Mới Cập Nhật</span>
-                </div>
-                <h2 id="new-heading" className="font-heading text-xl sm:text-2xl font-bold text-ghost">Mới Thêm Vào Kho</h2>
-              </div>
-              <Link href="/games?sort=created_at" className="text-sm text-ghost-dim hover:text-copper-light transition-colors">
-                Xem tất cả →
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-              {newGames.map((g, i) => (
                 <GameCard
                   key={g.id}
                   game={g}

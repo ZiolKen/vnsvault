@@ -208,10 +208,12 @@ export function isHttpUrl(url: string): boolean {
  * ⚠️ Keep this list in sync with next.config.ts's remotePatterns by hand —
  * there's no way to import next.config.ts's values into a component
  * (client or server) at runtime, so this is a deliberate duplication, not
- * an oversight. `*.supabase.co` covers every uploaded image (see
- * lib/storage.ts) since that's what actually made "use Next Image
- * Optimize" worth doing — the rest were already-safe hosts that happened
- * to be forced through the unoptimized path anyway.
+ * an oversight. `cdn.vnsvault.qzz.io` covers every newly-uploaded image
+ * (see lib/storage.ts's CDN_BASE_URL) since that's what actually made "use
+ * Next Image Optimize" worth doing — the rest were already-safe hosts that
+ * happened to be forced through the unoptimized path anyway. `*.supabase.co`
+ * stays for rows uploaded before the CDN switch, whose stored URL still
+ * points directly at Supabase and won't be rewritten retroactively.
  */
 const OPTIMIZABLE_HOSTS = [
   'i.imgur.com',
@@ -220,6 +222,7 @@ const OPTIMIZABLE_HOSTS = [
   'media.discordapp.net',
   'i.ibb.co',
   'res.cloudinary.com',
+  'cdn.vnsvault.qzz.io',
 ];
 const OPTIMIZABLE_SUFFIX = '.supabase.co';
 

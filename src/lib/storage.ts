@@ -134,6 +134,24 @@ export async function uploadImage(
     throw new StorageUploadError('Upload thất bại, vui lòng thử lại.');
   }
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  return toCdnUrl(path);
+}
+
+/**
+ * Maps a Storage object path (e.g. "games/<uuid>.webp") to its public URL.
+ *
+ * Points at the Cloudflare Worker CDN (cdn.vnsvault.qzz.io) rather than the
+ * raw Supabase project URL (id.supabase.co/storage/v1/object/public/...) —
+ * the Worker proxies+caches the same object at Supabase's edge. Falls back
+ * to Supabase's own getPublicUrl() when CDN_BASE_URL isn't set (e.g. local
+ * dev without the Worker configured), so uploads never hard-fail just
+ * because the CDN env var is missing.
+ */
+function toCdnUrl(path: string): string {
+  const cdnBase = process.env.CDN_BASE_URL; // e.g. https://cdn.vnsvault.qzz.io/uploads
+  if (cdnBase) return `${cdnBase.replace(/\/$/, '')}/${path}`;
+
+  const supabase = getStorageClient();
+  if (!supabase) throw new StorageNotConfiguredError();
+  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }

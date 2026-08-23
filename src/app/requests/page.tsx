@@ -286,12 +286,15 @@ export default function RequestsPage() {
                       key={req.id}
                       className="bg-surface border border-border rounded-xl p-4 sm:p-5 hover:border-copper/30 transition-colors fade-in"
                     >
-                      <div className="flex gap-4">
-                        {/* Vote button */}
+                      <div className="flex gap-3 sm:gap-4">
+                        {/* Vote button — fixed square footprint so it stays
+                            proportional to a single title line instead of
+                            towering over short titles or looking squashed
+                            next to long ones. */}
                         <button
                           onClick={() => setVoteModalReq(req)}
                           aria-label={`${req.user_voted ? 'Bỏ bình chọn' : 'Bình chọn'} cho ${req.title} (${req.vote_count} vote)`}
-                          className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border transition-all shrink-0 min-w-[52px] ${
+                          className={`flex flex-col items-center justify-center gap-0.5 w-14 h-14 shrink-0 self-start rounded-xl border transition-all ${
                             req.user_voted
                               ? 'bg-copper/15 border-copper/40 text-copper-light'
                               : 'border-border text-muted hover:border-copper/40 hover:text-copper-light'
@@ -305,10 +308,16 @@ export default function RequestsPage() {
 
                         {/* Content */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                          {/* Title row: index + title only — badges get
+                              their own line so they don't compete with the
+                              title for space and wrap unpredictably. */}
+                          <div className="flex items-baseline gap-2">
                             <span className="font-cinzel text-xs text-copper/50 font-bold shrink-0">#{i + 1}</span>
-                            <h2 className="font-heading text-base font-bold text-ghost leading-snug">{req.title}</h2>
-                            <span className={`badge border ${st.color} shrink-0`}>{st.label}</span>
+                            <h2 className="font-heading text-base font-bold text-ghost leading-snug min-w-0 break-words">{req.title}</h2>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5 mb-2">
+                            <span className={`badge border ${st.color}`}>{st.label}</span>
                             {req.engine && (
                               <span className="badge bg-dim/25 text-ghost-dim border-dim/40">{req.engine}</span>
                             )}
@@ -323,13 +332,13 @@ export default function RequestsPage() {
                               href={req.source_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-xs text-copper-light hover:text-copper transition-colors mb-2 truncate max-w-xs"
+                              className="flex items-center gap-1 min-w-0 text-xs text-copper-light hover:text-copper transition-colors mb-2"
                               aria-label={`Link gốc cho ${req.title} (mở tab mới)`}
                             >
                               <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
-                              {req.source_url.replace(/^https?:\/\//, '').slice(0, 55)}…
+                              <span className="truncate">{req.source_url.replace(/^https?:\/\//, '')}</span>
                             </a>
                           )}
 

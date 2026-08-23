@@ -47,6 +47,10 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'media.discordapp.net' },
       { protocol: 'https', hostname: 'i.ibb.co' },
       { protocol: 'https', hostname: 'res.cloudinary.com' },
+      { protocol: 'https', hostname: 'cdn.vnsvault.qzz.io' },
+      // Kept for images uploaded before the CDN_BASE_URL switch — their
+      // stored URL is still the raw Supabase one and won't be rewritten
+      // retroactively. Safe to drop once those rows are backfilled/expired.
       { protocol: 'https', hostname: '*.supabase.co' },
       { protocol: 'http',  hostname: 'localhost' },
     ],

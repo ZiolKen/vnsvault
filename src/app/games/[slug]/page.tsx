@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { after } from 'next/server';
 import { cache } from 'react';
 import type { Metadata } from 'next';
 import Image from 'next/image';
@@ -55,15 +56,18 @@ export default async function GameDetailPage({ params }: Props) {
   if (!game) notFound();
 
   const loggedIn = Boolean(session);
-  // Runs alongside the bookmark check below rather than after it — both are
-  // awaited together so the view-count write can't add its own sequential
-  // latency to the page, while still completing before the function
-  // returns (an un-awaited promise here could get cut off once the
-  // response is sent).
-  const [userBookmarked] = await Promise.all([
-    loggedIn ? isBookmarkedByUser(game.id, session!.userId) : Promise.resolve(false),
-    bumpGameViewCount(game.id),
-  ]);
+  const userBookmarked = loggedIn ? await isBookmarkedByUser(game.id, session!.userId) : false;
+
+  // Deliberately NOT awaited on the request path: bumpGameViewCount does a
+  // real write (fanOut UPDATE across all 3 Supabase shards), which on a
+  // cold serverless invocation means 3 fresh TCP+TLS handshakes before the
+  // page could render — this was the main contributor to the >1s TTFB seen
+  // in Speed Insights on /games/[slug] routes. `after()` schedules it to
+  // run once the response has already been streamed to the browser, so the
+  // analytics write no longer sits on the critical path. Safe to "fire and
+  // forget" here since it's a best-effort counter, not something the page
+  // itself needs to read back.
+  after(() => bumpGameViewCount(game.id));
 
   // SECURITY: the real download URL is never sent to the browser anymore,
   // logged in or not — DownloadButton only needs `id` now, and links to

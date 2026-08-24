@@ -138,11 +138,16 @@ export default function RegisterPage() {
               )}
             </div>
 
-            {/* Turnstile */}
+            {/* Turnstile — min-h reserves the widget's real rendered height
+                (Cloudflare's iframe is ~65px) before the async CF script has
+                even loaded. Without this the container starts at 0px and
+                snaps open once the iframe mounts, shoving the submit button
+                down mid-layout — exactly the CLS Speed Insights flagged on
+                this route. */}
             <TurnstileWidget
               onToken={setTsToken}
               onExpire={() => setTsToken('')}
-              className="flex justify-center"
+              className="flex justify-center min-h-[65px]"
             />
 
             <Button type="submit" loading={loading} loadingText="Đang tạo tài khoản..." fullWidth className="mt-1">

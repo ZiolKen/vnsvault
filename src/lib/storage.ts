@@ -131,7 +131,17 @@ export async function uploadImage(
   });
   if (error) {
     console.error('[storage] upload failed:', error);
-    throw new StorageUploadError('Upload thất bại, vui lòng thử lại.');
+    // Previously always threw a generic "Upload thất bại, vui lòng thử
+    // lại." — that swallowed the real reason (e.g. Supabase's bucket-level
+    // "mime type not supported" when the bucket's Allowed MIME types list
+    // was set to only image/png,image/jpeg at creation time and never
+    // included image/webp — a dashboard setting, not something this file
+    // controls). Surfacing Supabase's own message here (admin-only route,
+    // requireFreshAdmin already gates it, so nothing sensitive leaks to
+    // regular users) turns "upload thất bại" into an actionable error the
+    // admin can act on instead of a dead end.
+    const reason = error.message ? `: ${error.message}` : '';
+    throw new StorageUploadError(`Upload thất bại${reason}`);
   }
 
   return toCdnUrl(path);

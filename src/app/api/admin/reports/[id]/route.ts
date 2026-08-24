@@ -56,7 +56,22 @@ export async function DELETE(
   }
 
   try {
-    await db.fanOut('DELETE FROM link_reports WHERE id=$1', [id]);
+    // Previously had no RETURNING/no rows-check — always answered
+    // { success: true } even when the id matched nothing on any shard
+    // (stale row already deleted by another admin tab, or a UUID that
+    // simply doesn't exist). The client already removes the row from its
+    // local list optimistically, so a delete that silently affected zero
+    // rows still LOOKED like it worked in the UI right up until the next
+    // page load brought the "deleted" report back — which is exactly what
+    // "xoá không được" looks like from the outside. Checking the returned
+    // rows turns that into a real 404 the toast can show.
+    const rows = await db.fanOut<{ id: string }>(
+      'DELETE FROM link_reports WHERE id=$1 RETURNING id',
+      [id]
+    );
+    if (rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Không tìm thấy báo cáo (có thể đã bị xoá).' }, { status: 404 });
+    }
     return NextResponse.json({ success: true });
   } catch (e) {
     console.error('[DELETE /api/admin/reports/[id]]', e);

@@ -16,6 +16,7 @@ export type AgeRating = 'all' | '16+' | '18+';
 export type Platform = 'windows' | 'android' | 'macos' | 'ios' | 'linux' | 'webhtml5';
 export type RequestStatus = 'pending' | 'approved' | 'in_progress' | 'rejected';
 export type ReportStatus = 'open' | 'resolved';
+export type VipOrderStatus = 'pending' | 'paid' | 'cancelled' | 'expired';
 
 export interface User {
   id: string;
@@ -152,4 +153,26 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
   totalPages: number;
+}
+
+// ─── VIP order system ───────────────────────────────────────────────────
+export interface VipOrder {
+  id: string;
+  user_id: string;
+  order_code: string;
+  expected_amount: number;
+  months: number;
+  status: VipOrderStatus;
+  bank_transaction_id?: string | null;
+  paid_amount?: number | null;
+  created_at: string;
+  expires_at: string;
+}
+
+/** A purchasable VIP plan shown on the upgrade page. */
+export interface VipPlan {
+  id: string;
+  label: string;
+  months: number;
+  price: number; // VND
 }

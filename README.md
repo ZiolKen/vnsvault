@@ -20,7 +20,7 @@ Built with **Next.js 15**, deployed on **Vercel**, backed by **multi-shard Supab
 - **Đề xuất game** — người dùng đề xuất và vote game muốn được dịch
 - **Báo cáo link hỏng** — report broken / sai download link trực tiếp từ trang game
 - **Tài khoản người dùng** — đăng ký / đăng nhập, đổi mật khẩu, quên mật khẩu (đặt lại qua email), bookmark game, chọn avatar
-- **VIP** — tài khoản VIP (vĩnh viễn hoặc theo tháng, nâng cấp thủ công qua admin panel) tải game trực tiếp, bỏ qua bước "vượt link" quảng cáo (bbmkts.com) mà tài khoản thường phải đi qua
+- **VIP** — hệ thống mua VIP **hoàn toàn tự động** qua chuyển khoản ngân hàng/MoMo (tích hợp Webhook SePay + mã VietQR động, cộng VIP sau vài giây), ngoài ra admin vẫn có thể cấp thủ công. Tài khoản VIP tải game trực tiếp, không cần vượt link quảng cáo (bbmkts.com) mà tài khoản thường phải đi qua. Mua nhiều gói tháng/năm tự động cộng dồn (stacking) thời gian.
 - **Admin panel** — quản lý game (thêm / sửa / xoá / publish / featured), duyệt đề xuất, xử lý báo cáo link, quản lý người dùng & VIP (nâng cấp / gia hạn / thu hồi tại `/admin/users`), bật/tắt **chế độ bảo trì**, soạn **thông báo popup** hiển thị cho khách truy cập
 - **Thông báo popup** — popup thông báo toàn site, nội dung/tiêu đề/thời gian "Đóng N giờ" chỉnh sửa đầy đủ từ Admin Dashboard (`/admin/announcement`), lưu server-side; lượt đóng của khách được nhớ ở **IndexedDB** phía client theo từng phiên bản nội dung — sửa nội dung sẽ tự hiện lại popup cho người đã từng đóng
 - **Chế độ bảo trì** — admin bật/tắt tại `/admin/maintenance`, chặn toàn bộ request công khai ở tầng middleware, session admin vẫn truy cập bình thường
@@ -251,6 +251,16 @@ Nếu không set `PGCA_N`, shard đó vẫn dùng TLS encrypted nhưng bỏ qua 
 | `NEXT_PUBLIC_BASE_URL` | `http://localhost:3000` | URL công khai của site — dùng cho canonical URL và SEO metadata |
 | `BBMKTS_TOKEN` | *(hard-coded fallback trong code)* | Token dapi của bbmkts.com dùng để wrap link tải cho tài khoản không phải VIP (xem `src/lib/linkShortener.ts`). ⚠️ Nếu không set, code dùng token mặc định đã hard-code sẵn — **nên set biến này trước khi deploy prod** để có thể đổi token mà không cần sửa code, và để token thật không nằm trong Git history |
 
+### SePay Webhook (VIP tự động)
+
+Hệ thống bán VIP tự động nhận tiền qua cổng ngân hàng/MoMo bằng mã QR VietQR. Để nhận thông báo có người chuyển tiền (Webhook) từ SePay:
+
+| Variable | Required? | Description |
+|---|---|---|
+| `SEPAY_WEBHOOK_TOKEN` | Có ở Production | API Key do bạn lấy ở SePay Dashboard → Webhook. Webhook URL nhận của app là `https://<domain>/api/webhooks/sepay` |
+| `SEPAY_BANK_ACCOUNT` | Không, mặc định hardcode | Số tài khoản nhận tiền tạo mã QR (VD: VQRQAMDFQ6060) |
+| `SEPAY_BANK_ID` | Không, mặc định MBBank | Tên ngân hàng nhận tiền (VD: MBBank, VCB) |
+
 ### Redis (Upstash qua Vercel Marketplace)
 
 Dùng cho write-shard pointer — xem [Write-Shard Pointer (Redis + Cron)](#write-shard-pointer-redis--cron) ở trên. Cài "Upstash" từ **Vercel Marketplace** (KHÔNG dùng tài khoản Upstash riêng — tên biến khác nhau, xem comment trong `src/lib/redis.ts`), Vercel sẽ tự điền các biến này.
@@ -372,8 +382,9 @@ src/
 │       ├── genres/            # public GET — danh sách thể loại (fanOut, dedupe theo slug)
 │       ├── admin/             # admin-only API (games, users, reports, requests, announcement, maintenance, upload)
 │       ├── announcement/      # public GET — announcement popup content
-│       ├── account/           # avatar, password, bookmarks
+│       ├── account/           # avatar, password, bookmarks, orders (Lịch sử thanh toán & tạo QR VIP)
 │       ├── requests/          # vote
+│       ├── webhooks/          # sepay (Webhook xử lý tiền vào, tự động kích hoạt VIP)
 │       ├── internal/          # cron-only routes (xem Database Architecture)
 │       │   ├── shard-check/   # cập nhật write-shard pointer
 │       │   ├── reindex/       # build & cache homepage index vào Redis
@@ -405,6 +416,7 @@ src/
 │   ├── storage.ts              # Upload ảnh vào Supabase Storage
 │   ├── turnstile.ts            # Cloudflare Turnstile verification
 │   ├── vip.ts                  # VIP status computation (permanent / timed)
+│   ├── vipOrders.ts            # Xử lý đơn hàng VIP, tạo mã order_code & thuật toán cộng dồn (stacking) tháng
 │   ├── adminGuard.ts           # Guard cho admin-only routes/pages
 │   ├── maintenance.ts          # Đọc/ghi cờ chế độ bảo trì (Redis)
 │   ├── linkShortener.ts        # bbmkts.com "vượt link" wrapping for non-VIP downloads

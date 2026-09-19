@@ -332,6 +332,50 @@ INSERT INTO site_announcement (id, enabled, version, title, body, snooze_hours)
 VALUES (TRUE, FALSE, 1, 'Thông báo', '[]'::jsonb, 12)
 ON CONFLICT (id) DO NOTHING;
 
+-- VIP purchase orders — temporary payment sessions for automated VIP
+-- activation via SePay webhook. Each order is created when a user selects
+-- a VIP plan, generates a unique `order_code` embedded in the bank
+-- transfer message (QR code), and is fulfilled when the webhook confirms
+-- payment. Orders live on the SAME shard as their user (inserted via
+-- withRowTransaction on users.id) so the FK stays co-located.
+--
+-- NOTE on cross-shard: `user_id` FK works because vip_orders rows are
+-- always written to whichever shard holds the referenced user — same
+-- co-location pattern as link_reports → games. The webhook finds the
+-- order via fanOut (order_code is globally unique across shards by
+-- construction — see generateOrderCode in lib/vipOrders.ts), then pins
+-- the UPDATE + user VIP extension to that shard's connection.
+CREATE TABLE IF NOT EXISTS vip_orders (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- Short alphanumeric code embedded in the bank transfer message (des=
+  -- param of the VietQR URL). Globally unique across all shards — the
+  -- generation function includes a shard-index prefix to prevent cross-
+  -- shard collisions (see lib/vipOrders.ts).
+  order_code VARCHAR(12) UNIQUE NOT NULL,
+  -- The exact amount the user should transfer for this plan.
+  expected_amount INTEGER NOT NULL,
+  -- How many months of VIP this order grants upon payment.
+  months INTEGER NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'paid', 'cancelled', 'expired')),
+  -- Set by the webhook handler. UNIQUE prevents a duplicate webhook from
+  -- crediting VIP twice for the same bank transaction.
+  bank_transaction_id VARCHAR(100) UNIQUE,
+  -- Amount actually received (from webhook payload). May differ from
+  -- expected_amount if the user transferred a different sum.
+  paid_amount INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Orders expire after a window (e.g. 30 min). The webhook handler
+  -- checks this before crediting — an expired order is treated as stale
+  -- and the transfer is logged but not auto-credited (admin can review).
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vip_orders_user ON vip_orders(user_id);
+-- Partial index: only pending orders are looked up by the webhook.
+CREATE INDEX IF NOT EXISTS idx_vip_orders_code ON vip_orders(order_code) WHERE status = 'pending';
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_games_published     ON games(published, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_games_status        ON games(status);

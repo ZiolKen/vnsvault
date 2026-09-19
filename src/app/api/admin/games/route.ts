@@ -70,60 +70,80 @@ export async function POST(req: NextRequest) {
     }
 
     const existing = await db.fanOut('SELECT id FROM games WHERE slug=$1', [slug]);
-    const finalSlug = existing.length > 0 ? `${slug}-${Date.now()}` : slug;
+    let finalSlug = existing.length > 0 ? `${slug}-${Date.now()}` : slug;
 
-    const gameId = await db.withNewRowTransaction(async (client) => {
-      // nullify() trước khi truyền vào resolveTranslatorId
-      const translatorId = await resolveTranslatorId(nullify(body.translator_id), client);
+    // The fan-out check above is a TOCTOU race, same class as the
+    // register-route one (see that file): two admins creating a
+    // same-titled game at nearly the same moment could both pass it and
+    // then both attempt to INSERT the identical `finalSlug`. Trusted actor
+    // + narrow window make this low-severity, but it's a one-line fix —
+    // retry once on the shard's own UNIQUE(slug) violation (23505) with a
+    // fresh, guaranteed-distinct suffix, rather than surfacing a raw 500.
+    const MAX_SLUG_ATTEMPTS = 2;
+    let gameId: string | null = null;
+    for (let attempt = 1; attempt <= MAX_SLUG_ATTEMPTS && gameId === null; attempt++) {
+      try {
+        gameId = await db.withNewRowTransaction(async (client) => {
+          // nullify() trước khi truyền vào resolveTranslatorId
+          const translatorId = await resolveTranslatorId(nullify(body.translator_id), client);
 
-      const rows = await client.query<{ id: string }>(
-        `INSERT INTO games
-          (title, slug, description, cover_url, banner_url, developer, engine, status, age_rating,
-           translator_id, translator_note, is_featured, published)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-         RETURNING id`,
-        [
-          body.title.trim(),
-          finalSlug,
-          body.description.trim(),
-          nullify(body.cover_url),
-          nullify(body.banner_url),
-          nullify(body.developer),
-          nullify(body.engine),        // engine = '' → null (enum check passes)
-          body.status ?? 'in_progress',
-          body.age_rating ?? 'all',
-          translatorId,                // already null-safe from resolveTranslatorId
-          nullify(body.translator_note),
-          body.is_featured ?? false,
-          body.published ?? false,
-        ]
-      );
-      const id = rows.rows[0].id;
-
-      if (body.genres?.length) {
-        // Insert via subquery so the FK is satisfied by construction —
-        // only genre IDs that actually exist on this shard are inserted.
-        // Prevents a 23503 FK violation when a shard's genres table was
-        // seeded from an older schema.sql (see schema.sql for details).
-        await client.query(
-          `INSERT INTO game_genres (game_id, genre_id)
-             SELECT $1, id FROM genres WHERE id = ANY($2::int[])
-           ON CONFLICT DO NOTHING`,
-          [id, body.genres]
-        );
-      }
-
-      if (body.downloads?.length) {
-        for (const dl of body.downloads.filter(d => d.url?.trim())) {
-          await client.query(
-            'INSERT INTO game_downloads (game_id, version, platform, url, label) VALUES ($1,$2,$3,$4,$5)',
-            [id, dl.version, dl.platform, dl.url.trim(), nullify(dl.label)]
+          const rows = await client.query<{ id: string }>(
+            `INSERT INTO games
+              (title, slug, description, cover_url, banner_url, developer, engine, status, age_rating,
+               translator_id, translator_note, is_featured, published)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+             RETURNING id`,
+            [
+              body.title.trim(),
+              finalSlug,
+              body.description.trim(),
+              nullify(body.cover_url),
+              nullify(body.banner_url),
+              nullify(body.developer),
+              nullify(body.engine),        // engine = '' → null (enum check passes)
+              body.status ?? 'in_progress',
+              body.age_rating ?? 'all',
+              translatorId,                // already null-safe from resolveTranslatorId
+              nullify(body.translator_note),
+              body.is_featured ?? false,
+              body.published ?? false,
+            ]
           );
-        }
-      }
+          const id = rows.rows[0].id;
 
-      return id;
-    });
+          if (body.genres?.length) {
+            // Insert via subquery so the FK is satisfied by construction —
+            // only genre IDs that actually exist on this shard are inserted.
+            // Prevents a 23503 FK violation when a shard's genres table was
+            // seeded from an older schema.sql (see schema.sql for details).
+            await client.query(
+              `INSERT INTO game_genres (game_id, genre_id)
+                 SELECT $1, id FROM genres WHERE id = ANY($2::int[])
+               ON CONFLICT DO NOTHING`,
+              [id, body.genres]
+            );
+          }
+
+          if (body.downloads?.length) {
+            for (const dl of body.downloads.filter(d => d.url?.trim())) {
+              await client.query(
+                'INSERT INTO game_downloads (game_id, version, platform, url, label) VALUES ($1,$2,$3,$4,$5)',
+                [id, dl.version, dl.platform, dl.url.trim(), nullify(dl.label)]
+              );
+            }
+          }
+
+          return id;
+        });
+      } catch (e: unknown) {
+        const isSlugConflict = (e as { code?: string })?.code === '23505';
+        if (isSlugConflict && attempt < MAX_SLUG_ATTEMPTS) {
+          finalSlug = `${slug}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+          continue;
+        }
+        throw e;
+      }
+    }
 
     return NextResponse.json({ success: true, data: { id: gameId, slug: finalSlug } }, { status: 201 });
   } catch (e) {

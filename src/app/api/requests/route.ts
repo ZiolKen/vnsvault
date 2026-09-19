@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/jwt';
 import { verifyTurnstile } from '@/lib/turnstile';
+import { cached, SHORT_CACHE_TTL_SECONDS } from '@/lib/redis';
 
 interface RequestRow {
   id: string; title: string; source_url: string | null; engine: string | null;
@@ -10,19 +11,34 @@ interface RequestRow {
   vote_count: number; created_at: string;
 }
 
+// Unlike /api/games this list has no pagination — the requests board is
+// meant to be small enough to browse in full. This still caps how many
+// rows we'll ever pull per shard so an unbounded, ever-growing table can't
+// turn a public, unauthenticated, uncached fan-out into a standing DB-load
+// vector (this table has no LIMIT/cache at all before this change).
+const MAX_REQUESTS = 500;
+
 export async function GET() {
   try {
-    // Requests can live on any shard — fan out and merge, then sort in app
-    // code since ORDER BY only sorts within each shard's own result set.
-    const items = await db.fanOut<RequestRow>(
-      `SELECT id, title, source_url, engine, description, submitted_by, status, vote_count, created_at
-       FROM game_requests`
-    );
-    items.sort((a, b) =>
-      b.vote_count - a.vote_count ||
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-    return NextResponse.json({ success: true, data: items });
+    // Public, no per-user data — safe to share one cached response across
+    // every visitor, same pattern as /api/games. Requests can live on any
+    // shard, so the fan-out + sort + slice still happens on every cache
+    // miss; the cache just keeps that off the hot path most of the time.
+    const payload = await cached('requests:list', SHORT_CACHE_TTL_SECONDS, async () => {
+      const items = await db.fanOut<RequestRow>(
+        `SELECT id, title, source_url, engine, description, submitted_by, status, vote_count, created_at
+         FROM game_requests
+         ORDER BY vote_count DESC, created_at ASC
+         LIMIT ${MAX_REQUESTS}`
+      );
+      items.sort((a, b) =>
+        b.vote_count - a.vote_count ||
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      return items.slice(0, MAX_REQUESTS);
+    });
+
+    return NextResponse.json({ success: true, data: payload });
   } catch (e) {
     console.error('[GET /api/requests]', e);
     return NextResponse.json({ success: false, error: 'Lỗi server' }, { status: 500 });

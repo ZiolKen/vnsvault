@@ -9,6 +9,7 @@ import { canOptimizeImage } from '@/lib/utils';
 import { refreshNavUser } from '@/components/layout/Navbar';
 import type { BookmarkedGameRow } from '@/lib/queries';
 import { apiFetch } from '@/lib/apiClient';
+import type { VipOrder, VipOrderStatus } from '@/types';
 
 interface UserInfo {
   id: string;
@@ -315,17 +316,92 @@ function BookmarkList({ userId }: { userId: string }) {
   );
 }
 
+/* ──────────────────────────────── VIP order history ──── */
+function orderStatusLabel(s: VipOrderStatus): string {
+  const map: Record<VipOrderStatus, string> = {
+    pending: 'Chờ thanh toán',
+    paid: 'Đã thanh toán',
+    cancelled: 'Đã hủy',
+    expired: 'Hết hạn',
+  };
+  return map[s] ?? s;
+}
+
+function orderStatusColor(s: VipOrderStatus): string {
+  const map: Record<VipOrderStatus, string> = {
+    pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+    paid: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    cancelled: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+    expired: 'bg-red-500/20 text-red-400 border-red-500/30',
+  };
+  return map[s] ?? 'bg-gray-500/20 text-gray-400';
+}
+
+function VipOrderHistory() {
+  const [orders, setOrders] = useState<VipOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch('/api/account/orders')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.success) setOrders(d.data ?? []); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="space-y-3">
+      {[...Array(3)].map((_, i) => <div key={i} className="h-16 bg-surface rounded-xl shimmer" />)}
+    </div>
+  );
+
+  if (orders.length === 0) return (
+    <div className="text-center py-10 text-ghost-dim">
+      <p className="text-4xl mb-3">💳</p>
+      <p className="text-sm">Chưa có giao dịch nào.</p>
+      <Link href="/donate" className="btn-copper mt-4 text-sm">Đăng ký VIP</Link>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {orders.map(order => (
+        <div key={order.id} className="flex items-center gap-4 p-4 bg-surface border border-border rounded-xl">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${orderStatusColor(order.status)}`}>
+                {orderStatusLabel(order.status)}
+              </span>
+              <span className="text-xs text-muted">
+                {new Date(order.created_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+            <p className="text-sm text-ghost">
+              <span className="font-medium">{order.months} tháng VIP</span>
+              {' — '}
+              <span className="text-copper-light font-semibold">
+                {(order.paid_amount ?? order.expected_amount).toLocaleString('vi-VN')}₫
+              </span>
+            </p>
+            <p className="text-xs text-muted mt-0.5">Mã: {order.order_code}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ──────────────────────────────── Main page ────────────── */
-type Tab = 'bookmarks' | 'avatar' | 'password';
+type Tab = 'bookmarks' | 'vip-history' | 'avatar' | 'password';
 
 export default function MyAccountClient({ user, vip }: { user: UserInfo; vip: VipStatus }) {
   const [tab, setTab] = useState<Tab>('bookmarks');
   const [avatarUrl, setAvatarUrl] = useState(user.avatar_url);
 
   const TABS: { id: Tab; label: string; icon: string }[] = [
-    { id: 'bookmarks', label: 'Game Yêu Thích', icon: '🔖' },
-    { id: 'avatar',    label: 'Ảnh Đại Diện',   icon: '🖼️' },
-    { id: 'password',  label: 'Đổi Mật Khẩu',   icon: '🔒' },
+    { id: 'bookmarks',   label: 'Game Yêu Thích',    icon: '🔖' },
+    { id: 'vip-history', label: 'Lịch Sử VIP',       icon: '💳' },
+    { id: 'avatar',      label: 'Ảnh Đại Diện',      icon: '🖼️' },
+    { id: 'password',    label: 'Đổi Mật Khẩu',      icon: '🔒' },
   ];
 
   return (
@@ -378,9 +454,10 @@ export default function MyAccountClient({ user, vip }: { user: UserInfo; vip: Vi
 
         {/* Tab panels */}
         <div role="tabpanel">
-          {tab === 'bookmarks' && <BookmarkList userId={user.id} />}
-          {tab === 'avatar'    && <AvatarPicker user={{ ...user, avatar_url: avatarUrl }} onUpdated={setAvatarUrl} />}
-          {tab === 'password'  && <PasswordForm />}
+          {tab === 'bookmarks'   && <BookmarkList userId={user.id} />}
+          {tab === 'vip-history' && <VipOrderHistory />}
+          {tab === 'avatar'      && <AvatarPicker user={{ ...user, avatar_url: avatarUrl }} onUpdated={setAvatarUrl} />}
+          {tab === 'password'    && <PasswordForm />}
         </div>
       </div>
     </main>

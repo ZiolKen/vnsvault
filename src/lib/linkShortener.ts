@@ -19,8 +19,24 @@ const BBMKTS_ENDPOINT = 'https://bbmkts.com/dapi';
 // out of the box.
 const DEFAULT_TOKEN = '867bc5213c2306e9662cb445';
 
+let warnedAboutDefaultToken = false;
+
 function getToken(): string {
-  return process.env.BBMKTS_TOKEN?.trim() || DEFAULT_TOKEN;
+  const fromEnv = process.env.BBMKTS_TOKEN?.trim();
+  if (fromEnv) return fromEnv;
+
+  // The fallback below is committed in source, so it's effectively public.
+  // It's an ad-network affiliate token, not an auth secret for this app —
+  // worst case of it leaking/being reused is bbmkts revenue attribution,
+  // not an account/data compromise — so this warns rather than refusing to
+  // start (unlike JWT_SECRET/NEXT_PUBLIC_BASE_URL). Warn once per instance
+  // instead of on every download click so it doesn't drown out real errors
+  // in the logs.
+  if (process.env.NODE_ENV === 'production' && !warnedAboutDefaultToken) {
+    warnedAboutDefaultToken = true;
+    console.warn('[linkShortener] BBMKTS_TOKEN not set in production — using the committed default token.');
+  }
+  return DEFAULT_TOKEN;
 }
 
 /**

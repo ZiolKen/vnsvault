@@ -125,6 +125,7 @@ class ShardedDb {
     game_requests: ['id'],
     game_downloads: ['id'],
     link_reports: ['id'],
+    vip_orders: ['id', 'order_code'],
   };
 
   private init() {

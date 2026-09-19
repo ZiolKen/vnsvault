@@ -39,6 +39,7 @@ const MAINTENANCE_EXEMPT_PREFIXES = [
   '/api/admin',
   '/api/auth',
   '/api/internal',
+  '/api/webhooks',
   '/api/health',
 ];
 
@@ -81,6 +82,12 @@ const API_RATE_LIMITS: { prefix: string; windowMs: number; max: number }[] = [
   { prefix: '/api/auth/register', windowMs: 60_000, max: 5 },
   { prefix: '/api/auth/forgot-password', windowMs: 60_000, max: 4 },
   { prefix: '/api/auth/reset-password', windowMs: 60_000, max: 10 },
+  // Guessing `currentPassword` is what this route is for from an attacker's
+  // POV — it's already gated by Turnstile + a fresh bcrypt compare, but a
+  // dedicated ceiling here is defense-in-depth on top of that rather than
+  // relying solely on the generic '/api' rule (240/min) below, same
+  // reasoning as the auth endpoints above.
+  { prefix: '/api/account/password', windowMs: 60_000, max: 10 },
   // Tighter than the generic /api rule: each request here carries a
   // multipart file body and writes to Supabase Storage — worth a lower
   // ceiling than plain JSON API calls even though the caller is already

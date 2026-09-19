@@ -20,9 +20,18 @@ export async function GET(req: NextRequest) {
     // the usual expectation for tag filtering (narrows results as you add
     // more tags rather than broadening them).
     const tagsParam = searchParams.get('tags');
+    // Each tag becomes its own EXISTS(...) subquery below, run across every
+    // shard — an unbounded tag count from the query string (e.g.
+    // `tags=a,a,a,...` repeated thousands of times) would let anyone build
+    // an arbitrarily expensive query with no auth required, capped only by
+    // the generic per-IP rate limit. MAX_TAGS bounds the query's own
+    // complexity regardless of how many tags a request tries to pass.
     // Sorted so `tags=a,b` and `tags=b,a` — same filter, different URL —
     // land on the same Redis cache key below instead of two separate ones.
-    const tags = tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(Boolean).sort() : [];
+    const MAX_TAGS = 10;
+    const tags = tagsParam
+      ? Array.from(new Set(tagsParam.split(',').map(t => t.trim()).filter(Boolean))).slice(0, MAX_TAGS).sort()
+      : [];
     const search   = searchParams.get('q');
     const featured = searchParams.get('featured');
     const sortBy   = searchParams.get('sort') ?? 'updated_at';

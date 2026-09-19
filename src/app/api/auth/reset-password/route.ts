@@ -45,14 +45,25 @@ export async function POST(req: NextRequest) {
     }
 
     const tokenHash = hashResetToken(token.trim());
+    const newHash = await hashPassword(password);
 
-    // Token owner could be on any shard. Match hash AND unexpired in one
-    // query so an expired token is indistinguishable from a bogus one.
+    // Consume the token in a SINGLE atomic UPDATE...RETURNING, gated on the
+    // same hash+expiry condition that used to live in a separate SELECT.
+    // The previous SELECT-then-UPDATE shape left a race window: two
+    // requests carrying the same still-valid token could both pass the
+    // SELECT check before either UPDATE ran (each bcrypt hash costs
+    // ~100ms), so both would go on to "successfully" reset the password —
+    // violating the single-use guarantee the token is supposed to have.
+    // Folding the check into the UPDATE's WHERE clause makes Postgres's own
+    // row-level locking do the serialization: whichever request's UPDATE
+    // commits first clears reset_token_hash, so the second one's WHERE no
+    // longer matches and it affects zero rows.
     const rows = await db.fanOut<{ id: string }>(
-      `SELECT id FROM users
-       WHERE reset_token_hash=$1 AND reset_token_expires_at > NOW()
-       LIMIT 1`,
-      [tokenHash]
+      `UPDATE users
+       SET password_hash=$1, reset_token_hash=NULL, reset_token_expires_at=NULL
+       WHERE reset_token_hash=$2 AND reset_token_expires_at > NOW()
+       RETURNING id`,
+      [newHash, tokenHash]
     );
     const user = rows[0];
     if (!user) {
@@ -64,14 +75,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    const newHash = await hashPassword(password);
-    // Set the new password AND invalidate the token atomically so the link
-    // is strictly single-use.
-    await db.fanOut(
-      'UPDATE users SET password_hash=$1, reset_token_hash=NULL, reset_token_expires_at=NULL WHERE id=$2',
-      [newHash, user.id]
-    );
 
     return NextResponse.json({
       success: true,

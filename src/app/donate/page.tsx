@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
+import { getSession } from '@/lib/jwt';
+import DonateVipClient from './DonateVipClient';
 
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://vnsvault.vercel.app';
 
@@ -25,7 +27,10 @@ const BENEFITS = [
   { icon: '🚀', title: 'Server tốc độ cao', desc: 'Đảm bảo tốc độ tải game nhanh và ổn định cho toàn bộ cộng đồng.' },
 ];
 
-export default function DonatePage() {
+export default async function DonatePage() {
+  const session = await getSession();
+  const isLoggedIn = !!session;
+
   return (
     <main className="pt-16 flex-1" id="main-content">
         {/* ── Hero banner ── */}
@@ -60,14 +65,14 @@ export default function DonatePage() {
             <span className="text-2xl shrink-0" aria-hidden="true">👑</span>
             <p className="text-sm text-ghost-dim flex-1">
               <span className="text-copper-light font-semibold">Đã có gói VIP!</span>{' '}
-              Đăng ký để tải game <strong className="text-ghost">trực tiếp, không cần vượt link quảng cáo</strong> — xem bảng giá bên dưới.
+              Đăng ký để tải game <strong className="text-ghost">trực tiếp, không cần vượt link quảng cáo</strong> — chọn gói phù hợp bên dưới. VIP được kích hoạt <strong className="text-ghost">tự động</strong> sau khi chuyển khoản.
             </p>
-            <a href="#vip-pricing" className="btn-copper text-sm shrink-0 justify-center">Xem gói VIP ↓</a>
+            <a href="#vip-pricing" className="btn-copper text-sm shrink-0 justify-center">Mua VIP ngay ↓</a>
           </div>
 
           {/* ── Main content grid ── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
-            {/* QR Code card */}
+            {/* QR Code card — static donation */}
             <div className="bg-surface border border-border rounded-2xl p-6 sm:p-8 flex flex-col items-center gap-5">
               <div>
                 <h2 className="font-heading text-xl font-bold text-ghost text-center mb-1">Quét QR Để Ủng Hộ</h2>
@@ -97,7 +102,7 @@ export default function DonatePage() {
               </div>
             </div>
 
-            {/* VIP pricing + note */}
+            {/* VIP pricing + purchase — interactive */}
             <div className="flex flex-col gap-5">
               {/* Thank you message */}
               <div className="bg-copper/5 border border-copper/25 rounded-xl p-5">
@@ -109,40 +114,8 @@ export default function DonatePage() {
                 </p>
               </div>
 
-              {/* VIP pricing table */}
-              <div id="vip-pricing" className="bg-gradient-to-br from-copper/10 via-surface to-surface border border-copper/30 rounded-xl p-5 scroll-mt-24">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xl" aria-hidden="true">👑</span>
-                  <h2 className="font-heading text-base font-bold text-ghost">Đăng Ký VIP</h2>
-                </div>
-                <p className="text-sm text-ghost-dim mb-4">
-                  Tài khoản VIP tải game <strong className="text-copper-light">trực tiếp, không cần vượt link</strong> quảng cáo.
-                </p>
-
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-surface border border-border rounded-xl p-4 text-center">
-                    <p className="text-xs text-muted uppercase tracking-wider mb-1.5">Theo Tháng</p>
-                    <p className="font-cinzel text-2xl font-bold text-copper-light leading-none">19K<span className="text-xs text-muted font-sans font-normal">₫</span></p>
-                    <p className="text-xs text-muted mt-1">/ tháng</p>
-                  </div>
-                  <div className="relative bg-surface border-2 border-copper/50 rounded-xl p-4 text-center">
-                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 bg-copper text-obsidian rounded-full font-bold whitespace-nowrap">
-                      Tiết kiệm hơn
-                    </span>
-                    <p className="text-xs text-muted uppercase tracking-wider mb-1.5">Theo Năm</p>
-                    <p className="font-cinzel text-2xl font-bold text-copper-light leading-none">199K<span className="text-xs text-muted font-sans font-normal">₫</span></p>
-                    <p className="text-xs text-muted mt-1">/ năm</p>
-                  </div>
-                </div>
-
-                <div className="bg-vault/60 border border-border rounded-lg p-3.5 text-xs text-ghost-dim leading-relaxed mb-4">
-                  <strong className="text-copper-light">⚠ Lưu ý khi chuyển khoản:</strong> ghi rõ <strong className="text-ghost">tên tài khoản</strong> và <strong className="text-ghost">email đã đăng ký</strong> trên VNSVault trong nội dung chuyển khoản (VD: <code className="text-copper-light">VIP tencuaban ten@email.com</code>) — nhóm dùng nội dung này để kích hoạt VIP đúng tài khoản của bạn.
-                </div>
-
-                <p className="text-xs text-muted text-center">
-                  Sau khi chuyển khoản, VIP sẽ được kích hoạt trong thời gian sớm nhất. Cần hỗ trợ nhanh? Liên hệ qua <a href="mailto:contact@ziolken.qzz.io" target="_blank" rel="noopener noreferrer">Email</a> hoặc <a href="https://t.me/ZiolKen" target="_blank" rel="noopener noreferrer">Telegram</a>.
-                </p>
-              </div>
+              {/* Interactive VIP purchase component */}
+              <DonateVipClient isLoggedIn={isLoggedIn} />
             </div>
           </div>
 

@@ -27,9 +27,27 @@ const GENERIC_OK = {
     'Nếu email tồn tại trong hệ thống, chúng tôi đã gửi liên kết đặt lại mật khẩu. Vui lòng kiểm tra hộp thư (kể cả mục Spam).',
 };
 
-function resolveBaseUrl(req: NextRequest): string {
-  const fromEnv = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '');
-  return fromEnv || req.nextUrl.origin;
+// SECURITY: this MUST be a fixed, operator-configured value — never derived
+// from the incoming request (Host / X-Forwarded-Host headers are
+// client-controlled). Every other place in this codebase that needs the
+// site's own origin falls back to a hardcoded literal
+// (https://vnsvault.vercel.app) when the env var is missing; this route
+// used to be the one exception, falling back to `req.nextUrl.origin` —
+// which let an attacker who can influence the Host header (missing env var
+// + no strict host-pinning at the edge/proxy) get a valid password-reset
+// link emailed to a real victim but pointing at an attacker-controlled
+// domain ("password reset poisoning"). Since this value is embedded in a
+// security-sensitive, single-use link, we refuse to send rather than ever
+// guess it — same "fail rather than silently degrade" contract as
+// JWT_SECRET in lib/jwt.ts.
+function resolveBaseUrl(): string {
+  const base = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '');
+  if (!base) {
+    throw new Error(
+      '[FATAL] NEXT_PUBLIC_BASE_URL is not set — refusing to build a password-reset link from request headers.'
+    );
+  }
+  return base;
 }
 
 export async function POST(req: NextRequest) {
@@ -70,7 +88,7 @@ export async function POST(req: NextRequest) {
         [tokenHash, expiresAt.toISOString(), user.id]
       );
 
-      const site = resolveBaseUrl(req);
+      const site = resolveBaseUrl();
       const resetUrl = `${site}/reset-password?token=${rawToken}`;
       const { subject, html, text } = passwordResetEmail({
         resetUrl,

@@ -120,12 +120,22 @@ class ShardedDb {
   // plain strings — a future call site that accidentally threads a request
   // value through would be a SQL injection. This whitelist is a guardrail
   // against that, not a defense against an already-compromised call site.
+  //
+  // `users`/`id` was missing here even though two call sites already
+  // depend on it — POST /api/account/orders (pin the new order to the
+  // buyer's own shard) and the SePay webhook's fulfillment transaction
+  // (pin VIP-extension to the paying user's shard). Both were throwing
+  // "table \"users\" / column \"id\" not in whitelist" on every call, which
+  // for the webhook meant a real bank transfer would be logged but VIP
+  // would never actually get granted — a payment-processing outage, not
+  // just an order-history one.
   private static readonly ALLOWED_TABLES: Record<string, string[]> = {
     games: ['id', 'slug'],
     game_requests: ['id'],
     game_downloads: ['id'],
     link_reports: ['id'],
     vip_orders: ['id', 'order_code'],
+    users: ['id'],
   };
 
   private init() {

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, RowNotFoundError } from '@/lib/db';
 import { requireFreshAdmin } from '@/lib/adminGuard';
 import { resolveTranslatorId } from '@/lib/translators';
-import { isHttpUrl } from '@/lib/utils';
+import { isHttpUrl, isValidUUID } from '@/lib/utils';
 
 async function guard(req: NextRequest) {
   return requireFreshAdmin(req);
@@ -18,6 +18,9 @@ function nullify(v: string | undefined | null): string | null {
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!await guard(req)) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   const { id } = await params;
+  if (!isValidUUID(id)) {
+    return NextResponse.json({ success: false, error: 'ID không hợp lệ' }, { status: 400 });
+  }
 
   const rows = await db.fanOut('SELECT * FROM games WHERE id=$1', [id]);
   if (!rows[0]) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
@@ -36,6 +39,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!await guard(req)) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   const { id } = await params;
+  if (!isValidUUID(id)) {
+    return NextResponse.json({ success: false, error: 'ID không hợp lệ' }, { status: 400 });
+  }
 
   const body = await req.json() as {
     title?: string; description?: string; cover_url?: string; banner_url?: string;
@@ -135,6 +141,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!await guard(req)) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   const { id } = await params;
+  if (!isValidUUID(id)) {
+    return NextResponse.json({ success: false, error: 'ID không hợp lệ' }, { status: 400 });
+  }
   // fanOut DELETE — chỉ shard chứa row mới bị ảnh hưởng, các shard khác no-op
   await db.fanOut('DELETE FROM games WHERE id=$1', [id]);
   return NextResponse.json({ success: true });

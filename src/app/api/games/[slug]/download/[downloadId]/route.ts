@@ -90,9 +90,13 @@ function toScriptLiteral(s: string): string {
  * it 404s, the <img> just hides itself and the gradient panel behind it
  * shows instead, so nothing looks broken in the meantime.
  */
-function interstitialPage(destination: string, backHref: string): NextResponse {
+function interstitialPage(destination: string, backHref: string, nonce: string | null): NextResponse {
   const safeDest = escapeHtmlAttr(destination);
   const scriptDest = toScriptLiteral(destination);
+  // nonce comes from middleware.ts (forwarded as the `x-nonce` request
+  // header) and must match the one in the response's CSP header, or the
+  // browser blocks this inline redirect script under the nonce-based CSP.
+  const nonceAttr = nonce ? ` nonce="${escapeHtmlAttr(nonce)}"` : '';
   const html = `<!doctype html>
 <html lang="vi"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -147,7 +151,7 @@ function interstitialPage(destination: string, backHref: string): NextResponse {
   </div>
   <p class="notice">Liên kết này đã được ẩn để ngăn bot tự động. Nhấn nút phía trên nếu bạn không được tự động chuyển hướng.</p>
 </div>
-<script>setTimeout(function(){ window.location.replace(${scriptDest}); }, 2000);</script>
+<script${nonceAttr}>setTimeout(function(){ window.location.replace(${scriptDest}); }, 2000);</script>
 </body></html>`;
   return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store' } });
 }
@@ -202,16 +206,18 @@ export async function GET(
       [row.game_id]
     ).catch((e) => console.error('[download-resolver] count bump failed', e));
 
+    const nonce = req.headers.get('x-nonce');
+
     const vip = await getUserVipStatus(session.userId);
     if (vip.isVip) {
-      return interstitialPage(row.url, backHref);
+      return interstitialPage(row.url, backHref, nonce);
     }
 
     const wrapped = await wrapDownloadUrl(row.url);
     if (!wrapped) {
       return errorPage('Dịch vụ vượt link tạm thời không khả dụng', backHref, 502);
     }
-    return interstitialPage(wrapped, backHref);
+    return interstitialPage(wrapped, backHref, nonce);
   } catch (e) {
     if (e instanceof RowNotFoundError) {
       return errorPage('Không tìm thấy link tải', backHref, 404);

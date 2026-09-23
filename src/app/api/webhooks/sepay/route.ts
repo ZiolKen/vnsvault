@@ -1,23 +1,12 @@
 export const runtime = 'nodejs';
-import { NextRequest, NextResponse } from 'next/server';
-import { timingSafeEqual } from 'crypto';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { db, RowNotFoundError } from '@/lib/db';
 import { computeMonthsFromAmount } from '@/lib/vipOrders';
+import { safeCompare } from '@/lib/safeCompare';
+import { sendEmail } from '@/lib/email';
+import { vipOrderPaidEmail } from '@/lib/emails/vipOrderPaidEmail';
 
-/**
- * Constant-time string compare — a plain `!==` on the webhook token leaks
- * timing information proportional to how many leading bytes match, which
- * (in theory, given enough samples) lets an attacker recover the token
- * byte-by-byte instead of needing to guess it whole. `timingSafeEqual`
- * requires equal-length buffers, so unequal lengths are rejected up front
- * without ever touching it (that early return's timing depends only on
- * length, not content, so it leaks nothing about the actual token bytes).
- */
-function safeCompare(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
-}
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://vnsvault.vercel.app';
 
 /**
  * POST /api/webhooks/sepay
@@ -181,6 +170,11 @@ export async function POST(req: NextRequest) {
 
   // ── Fulfill the order (atomic transaction on user's shard) ────────
   try {
+    // Populated inside the transaction below (same shard as the order/user,
+    // so no extra round trip) — used afterwards to send the confirmation
+    // email. Stays null if this webhook call turns out to be a no-op retry.
+    let recipient: { username: string; email: string } | null = null;
+
     await db.withRowTransaction('users', 'id', order.user_id, async (client) => {
       // Mark order as paid (idempotent via UNIQUE on bank_transaction_id)
       const updateRes = await client.query(
@@ -213,9 +207,39 @@ export async function POST(req: NextRequest) {
           [monthsToAdd, order.user_id]
         );
       }
+
+      const userRes = await client.query<{ username: string; email: string }>(
+        `SELECT username, email FROM users WHERE id = $1 LIMIT 1`,
+        [order.user_id]
+      );
+      recipient = userRes.rows[0] ?? null;
     });
 
     console.log(`[Webhook/SePay] ✅ Order "${orderCode}" fulfilled: +${monthsToAdd} months for user ${order.user_id}. Amount: ${amount}. TxID: ${bankTxId}`);
+
+    // Order confirmation email — scheduled via after() so the webhook
+    // response isn't held up by (and doesn't fail because of) a Resend
+    // call. SePay retries on non-2xx, so a slow/failed email must never
+    // turn into a webhook error and re-trigger fulfillment logic.
+    if (recipient) {
+      const { username, email } = recipient;
+      const { subject, html, text } = vipOrderPaidEmail({
+        username,
+        orderCode,
+        months: monthsToAdd,
+        paidAmount: amount,
+        paidAt: new Date().toISOString(),
+        baseUrl: BASE_URL,
+      });
+      after(() =>
+        sendEmail({ to: email, subject, html, text })
+          .then(sent => {
+            if (!sent) console.error(`[Webhook/SePay] Order confirmation email failed to send for order "${orderCode}"`);
+          })
+          .catch(e => console.error(`[Webhook/SePay] Order confirmation email threw for order "${orderCode}"`, e))
+      );
+    }
+
     return NextResponse.json({ success: true, message: 'Order fulfilled' });
   } catch (e) {
     if (e instanceof RowNotFoundError) {

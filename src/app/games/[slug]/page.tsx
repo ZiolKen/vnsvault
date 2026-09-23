@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { after } from 'next/server';
+import { headers } from 'next/headers';
 import { cache } from 'react';
 import type { Metadata } from 'next';
 import Image from 'next/image';
@@ -40,19 +41,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 
-function GameJsonLd({ game, slug }: { game: Game; slug: string }) {
+function GameJsonLd({ game, slug, nonce }: { game: Game; slug: string; nonce?: string }) {
   const url = `${BASE}/games/${slug}`;
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd({ '@context': 'https://schema.org', '@type': 'VideoGame', name: game.title, description: game.description?.slice(0, 500) ?? '', url, image: game.cover_url ?? undefined, genre: game.genres?.map(g => g.name) ?? [], applicationCategory: 'Game', inLanguage: 'vi', offers: { '@type': 'Offer', price: '0', priceCurrency: 'VND', availability: 'https://schema.org/InStock' }, datePublished: game.created_at, dateModified: game.updated_at, publisher: { '@type': 'Organization', name: 'VNSVault', url: BASE } }) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Trang chủ', item: BASE }, { '@type': 'ListItem', position: 2, name: 'Thư Viện', item: `${BASE}/games` }, { '@type': 'ListItem', position: 3, name: game.title, item: url }] }) }} />
+      <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: safeJsonLd({ '@context': 'https://schema.org', '@type': 'VideoGame', name: game.title, description: game.description?.slice(0, 500) ?? '', url, image: game.cover_url ?? undefined, genre: game.genres?.map(g => g.name) ?? [], applicationCategory: 'Game', inLanguage: 'vi', offers: { '@type': 'Offer', price: '0', priceCurrency: 'VND', availability: 'https://schema.org/InStock' }, datePublished: game.created_at, dateModified: game.updated_at, publisher: { '@type': 'Organization', name: 'VNSVault', url: BASE } }) }} />
+      <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: safeJsonLd({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Trang chủ', item: BASE }, { '@type': 'ListItem', position: 2, name: 'Thư Viện', item: `${BASE}/games` }, { '@type': 'ListItem', position: 3, name: game.title, item: url }] }) }} />
     </>
   );
 }
 
 export default async function GameDetailPage({ params }: Props) {
   const { slug } = await params;
-  const [game, session] = await Promise.all([getGame(slug), getSession()]);
+  const [game, session, nonce] = await Promise.all([
+    getGame(slug),
+    getSession(),
+    headers().then(h => h.get('x-nonce') ?? undefined),
+  ]);
   if (!game) notFound();
 
   const loggedIn = Boolean(session);
@@ -153,7 +158,7 @@ export default async function GameDetailPage({ params }: Props) {
 
   return (
     <>
-      <GameJsonLd game={game} slug={slug} />
+      <GameJsonLd game={game} slug={slug} nonce={nonce} />
       <main className="pt-16 flex-1" id="main-content">
 
         {/* ── HERO ── */}

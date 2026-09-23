@@ -34,6 +34,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHotGames, getFeaturedGames, getNewGames, getSiteStats } from '@/lib/queries';
 import type { HomepageIndex } from '@/lib/queries';
 import { getRedis, HOMEPAGE_INDEX_KEY, HOMEPAGE_INDEX_TTL_SECONDS } from '@/lib/redis';
+import { safeCompare } from '@/lib/safeCompare';
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -44,8 +45,10 @@ export async function GET(req: NextRequest) {
     }
     console.warn('[GET /api/internal/reindex] CRON_SECRET not set — allowing unauthenticated request (dev only).');
   } else {
-    const authHeader = req.headers.get('authorization');
-    if (authHeader !== `Bearer ${secret}`) {
+    // safeCompare (constant-time), not a plain `!==` — same reasoning as
+    // the SePay webhook's auth check.
+    const authHeader = req.headers.get('authorization') ?? '';
+    if (!safeCompare(authHeader, `Bearer ${secret}`)) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
   }

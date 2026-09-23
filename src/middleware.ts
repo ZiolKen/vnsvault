@@ -22,6 +22,7 @@ import { verifyToken, COOKIE_NAME } from '@/lib/jwt';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
 import { isMaintenanceOn } from '@/lib/maintenance';
 import { isTrustedOrigin, corsHeaders, CORS_PREFLIGHT_HEADERS } from '@/lib/corsConfig';
+import { buildCsp, generateNonce } from '@/lib/csp';
 
 const PROTECTED = ['/admin', '/myaccount'];
 
@@ -74,10 +75,22 @@ const BLOCKED_PATH_PATTERNS: RegExp[] = [
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-// Per-route rate limits, keyed by matcher prefix. Checked in order —
-// first match wins. Everything else under /api falls back to a generous
-// default so normal browsing traffic never gets caught.
-const API_RATE_LIMITS: { prefix: string; windowMs: number; max: number }[] = [
+// Per-route rate limits. Checked in order — first match wins. Everything
+// else under /api falls back to a generous default so normal browsing
+// traffic never gets caught.
+//
+// A rule matches either by a literal path prefix (`prefix`, via
+// startsWith — fine for routes with a fixed path) or by a `pattern`
+// regex, needed when the route has a dynamic segment in the *middle* of
+// the path (e.g. /api/games/[slug]/report-link) that a simple prefix
+// can't express. `pattern` rules must carry an explicit `key` used to
+// namespace the rate-limit bucket (there's no fixed prefix string to
+// reuse for that).
+type RateLimitRule =
+  | { prefix: string; windowMs: number; max: number }
+  | { pattern: RegExp; key: string; windowMs: number; max: number };
+
+const API_RATE_LIMITS: RateLimitRule[] = [
   { prefix: '/api/auth/login', windowMs: 60_000, max: 10 },
   { prefix: '/api/auth/register', windowMs: 60_000, max: 5 },
   { prefix: '/api/auth/forgot-password', windowMs: 60_000, max: 4 },
@@ -95,9 +108,31 @@ const API_RATE_LIMITS: { prefix: string; windowMs: number; max: number }[] = [
   // this check). Must stay listed before the generic '/api/games' and
   // '/api' rules below since the first matching prefix wins.
   { prefix: '/api/admin/upload', windowMs: 60_000, max: 20 },
+  // Cron-only routes gated by CRON_SECRET (constant-time compare, see
+  // lib/safeCompare.ts) — a tight ceiling here isn't about legitimate
+  // traffic (cron-job.org calls each of these a handful of times per
+  // hour at most) but about capping how many auth attempts an outsider
+  // trying to brute-force/guess CRON_SECRET can make per minute, on top
+  // of the constant-time compare already closing the timing side-channel.
+  { prefix: '/api/internal', windowMs: 60_000, max: 20 },
+  // Anonymous + Turnstile-gated, but Turnstile alone doesn't stop someone
+  // with a solved token from replaying it against the same game a dozen
+  // times — needs its own ceiling, tighter than the generic '/api/games'
+  // rule below and independent of the slug in the middle of the path.
+  // Must stay listed before that generic rule since the first matching
+  // rule wins.
+  { pattern: /^\/api\/games\/[^/]+\/report-link\/?$/, key: '/api/games/*/report-link', windowMs: 60_000, max: 10 },
   { prefix: '/api/games', windowMs: 60_000, max: 120 }, // POST/PATCH/DELETE from admin panel
   { prefix: '/api', windowMs: 60_000, max: 240 },
 ];
+
+function matchRateLimitRule(rule: RateLimitRule, pathname: string): boolean {
+  return 'prefix' in rule ? pathname.startsWith(rule.prefix) : rule.pattern.test(pathname);
+}
+
+function rateLimitKey(rule: RateLimitRule): string {
+  return 'prefix' in rule ? rule.prefix : rule.key;
+}
 
 function isSameOrigin(req: NextRequest): boolean {
   const origin = req.headers.get('origin');
@@ -134,6 +169,29 @@ function withCors(res: NextResponse, req: NextRequest): NextResponse {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Per-request CSP nonce. Forwarded on the request (via `requestHeaders`,
+  // read downstream as `x-nonce`) so pages/route handlers can stamp it on
+  // their own inline scripts, and stamped into the CSP response header
+  // below so the browser actually enforces that nonce — see lib/csp.ts.
+  const nonce = generateNonce();
+  const cspHeaderValue = buildCsp(nonce);
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-nonce', nonce);
+
+  // Only responses that go on to render a page (next()/rewrite()) need the
+  // nonce forwarded + CSP header — terminal responses below (403/404/429/
+  // redirects/503 JSON) have no inline scripts to gate.
+  function nextWithNonce(): NextResponse {
+    const res = NextResponse.next({ request: { headers: requestHeaders } });
+    res.headers.set('Content-Security-Policy', cspHeaderValue);
+    return res;
+  }
+  function rewriteWithNonce(url: URL): NextResponse {
+    const res = NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+    res.headers.set('Content-Security-Policy', cspHeaderValue);
+    return res;
+  }
 
   if (BLOCKED_PATH_PATTERNS.some(pattern => pattern.test(pathname))) {
     return new NextResponse(null, { status: 404 });
@@ -181,7 +239,7 @@ export async function middleware(req: NextRequest) {
       // propagate (vercel/next.js#50155). The page still renders correctly
       // as a 200; Retry-After is set as a best-effort hint for anything
       // that reads it, but this isn't relied on for correctness.
-      const res = NextResponse.rewrite(url);
+      const res = rewriteWithNonce(url);
       res.headers.set('Retry-After', '3600');
       return withPrivateHeaders(res);
     }
@@ -199,10 +257,10 @@ export async function middleware(req: NextRequest) {
   }
 
   if (isApiRoute) {
-    const limitRule = API_RATE_LIMITS.find(rule => pathname.startsWith(rule.prefix));
+    const limitRule = API_RATE_LIMITS.find(rule => matchRateLimitRule(rule, pathname));
     if (limitRule) {
       const ip = getClientIp(req.headers);
-      const { success, retryAfterSeconds } = await rateLimit(`${limitRule.prefix}:${ip}`, {
+      const { success, retryAfterSeconds } = await rateLimit(`${rateLimitKey(limitRule)}:${ip}`, {
         windowMs: limitRule.windowMs,
         max: limitRule.max,
       });
@@ -217,7 +275,7 @@ export async function middleware(req: NextRequest) {
 
   const isProtected = PROTECTED.some(p => pathname.startsWith(p));
   if (!isProtected) {
-    return isApiRoute ? withCors(NextResponse.next(), req) : NextResponse.next();
+    return isApiRoute ? withCors(nextWithNonce(), req) : nextWithNonce();
   }
 
   const token = req.cookies.get(COOKIE_NAME)?.value;
@@ -234,7 +292,7 @@ export async function middleware(req: NextRequest) {
     return withPrivateHeaders(redirect);
   }
 
-  return withPrivateHeaders(NextResponse.next());
+  return withPrivateHeaders(nextWithNonce());
 }
 
 export const config = {

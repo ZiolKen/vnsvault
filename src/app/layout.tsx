@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { Cinzel, Cormorant_Garamond, Playfair_Display, Inter } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
@@ -124,7 +125,11 @@ export const metadata: Metadata = {
   category: 'games',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Set by middleware.ts per-request and echoed back in the CSP response
+  // header's script-src — must be stamped on every inline <script>/<Script>
+  // below or the browser blocks them under the nonce-based CSP.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html
       lang="vi"
@@ -140,8 +145,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Script
               src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
               strategy="afterInteractive"
+              nonce={nonce}
             />
-            <Script id="ga-init" strategy="afterInteractive">
+            <Script id="ga-init" strategy="afterInteractive" nonce={nonce}>
               {`window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
@@ -152,6 +158,7 @@ gtag('config', '${GA_ID}');`}
         {/* JSON-LD: Organization */}
         <script
           type="application/ld+json"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: safeJsonLd({
               '@context': 'https://schema.org',
@@ -167,6 +174,7 @@ gtag('config', '${GA_ID}');`}
         {/* JSON-LD: WebSite with Sitelinks Searchbox */}
         <script
           type="application/ld+json"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: safeJsonLd({
               '@context': 'https://schema.org',

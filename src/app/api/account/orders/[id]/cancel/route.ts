@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/jwt';
 import { db } from '@/lib/db';
+import { isValidUUID } from '@/lib/utils';
 
 /**
  * POST /api/account/orders/[id]/cancel
@@ -17,6 +18,12 @@ export async function POST(
   }
 
   const { id } = await params;
+  if (!isValidUUID(id)) {
+    return NextResponse.json(
+      { success: false, error: 'Đơn hàng không tồn tại hoặc đã xử lý' },
+      { status: 404 }
+    );
+  }
 
   try {
     const rows = await db.fanOut<{ id: string }>(

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -222,9 +222,9 @@ function PasswordForm() {
   };
 
   return (
-    <div>
+    <div className="max-w-md mx-auto">
       <h2 className="font-heading text-lg font-bold text-ghost mb-4">Đổi Mật Khẩu</h2>
-      <form onSubmit={submit} className="space-y-4 max-w-md">
+      <form onSubmit={submit} className="space-y-4">
         {msg && <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-sm text-emerald-400">{msg}</div>}
         {err && <div role="alert" className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400">{err}</div>}
 
@@ -396,6 +396,8 @@ type Tab = 'bookmarks' | 'vip-history' | 'avatar' | 'password';
 export default function MyAccountClient({ user, vip }: { user: UserInfo; vip: VipStatus }) {
   const [tab, setTab] = useState<Tab>('bookmarks');
   const [avatarUrl, setAvatarUrl] = useState(user.avatar_url);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const TABS: { id: Tab; label: string; icon: string }[] = [
     { id: 'bookmarks',   label: 'Game Yêu Thích',    icon: '🔖' },
@@ -403,6 +405,24 @@ export default function MyAccountClient({ user, vip }: { user: UserInfo; vip: Vi
     { id: 'avatar',      label: 'Ảnh Đại Diện',      icon: '🖼️' },
     { id: 'password',    label: 'Đổi Mật Khẩu',      icon: '🔒' },
   ];
+
+  // On mobile, only the first two tabs show as top-level buttons; the rest
+  // collapse into a "more" dropdown opened via a gear icon.
+  const MOBILE_PRIMARY_COUNT = 2;
+  const mobilePrimaryTabs = TABS.slice(0, MOBILE_PRIMARY_COUNT);
+  const mobileMoreTabs = TABS.slice(MOBILE_PRIMARY_COUNT);
+  const isMoreTabActive = mobileMoreTabs.some(t => t.id === tab);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [moreOpen]);
 
   return (
     <main className="pt-16 flex-1" id="main-content">
@@ -438,8 +458,8 @@ export default function MyAccountClient({ user, vip }: { user: UserInfo; vip: Vi
           </div>
         </div>
 
-        {/* Tab navigation */}
-        <div className="flex gap-1 border-b border-border mb-7" role="tablist">
+        {/* Tab navigation — desktop: all 4 tabs */}
+        <div className="hidden md:flex gap-1 border-b border-border mb-7" role="tablist">
           {TABS.map(t => (
             <button key={t.id} type="button" role="tab" aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
@@ -450,6 +470,46 @@ export default function MyAccountClient({ user, vip }: { user: UserInfo; vip: Vi
               {t.label}
             </button>
           ))}
+        </div>
+
+        {/* Tab navigation — mobile: first 2 tabs + "more" dropdown for the rest */}
+        <div className="flex md:hidden items-center gap-1 border-b border-border mb-7" role="tablist">
+          {mobilePrimaryTabs.map(t => (
+            <button key={t.id} type="button" role="tab" aria-selected={tab === t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                tab === t.id ? 'border-copper text-copper-light' : 'border-transparent text-ghost-dim hover:text-ghost'
+              }`}>
+              <span aria-hidden="true">{t.icon}</span>
+              {t.label}
+            </button>
+          ))}
+
+          <div className="relative ml-auto" ref={moreMenuRef}>
+            <button type="button" aria-haspopup="true" aria-expanded={moreOpen}
+              onClick={() => setMoreOpen(o => !o)}
+              className={`flex items-center justify-center w-9 h-9 -mb-px border-b-2 transition-colors ${
+                isMoreTabActive ? 'border-copper text-copper-light' : 'border-transparent text-ghost-dim hover:text-ghost'
+              }`}>
+              <span aria-hidden="true">⚙</span>
+              <span className="sr-only">Thêm tuỳ chọn</span>
+            </button>
+
+            {moreOpen && (
+              <div role="menu" className="absolute right-0 top-full mt-2 w-48 py-1 bg-surface border border-border rounded-xl shadow-lg z-20">
+                {mobileMoreTabs.map(t => (
+                  <button key={t.id} type="button" role="menuitemradio" aria-checked={tab === t.id}
+                    onClick={() => { setTab(t.id); setMoreOpen(false); }}
+                    className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-left transition-colors ${
+                      tab === t.id ? 'bg-copper/20 text-copper-light' : 'text-ghost-dim hover:bg-vault hover:text-ghost'
+                    }`}>
+                    <span aria-hidden="true">{t.icon}</span>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Tab panels */}

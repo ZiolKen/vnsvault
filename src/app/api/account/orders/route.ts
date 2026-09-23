@@ -2,8 +2,13 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/jwt';
 import { db } from '@/lib/db';
-import { generateOrderCode, getPlanById, ORDER_EXPIRY_MS, buildQrUrl, VIP_PLANS } from '@/lib/vipOrders';
+import { generateOrderCode, getPlanById, ORDER_EXPIRY_MS, buildQrUrl, VIP_PLANS, computeMonthsFromAmount } from '@/lib/vipOrders';
 import type { VipOrder } from '@/types';
+
+/** Sanity caps on a single checkout — generous, but keeps a typo/bad
+ *  client payload from creating an absurd order (e.g. qty: 999999). */
+const MAX_LINE_QUANTITY = 20;
+const MAX_LINE_ITEMS = VIP_PLANS.length;
 
 /**
  * GET /api/account/orders
@@ -30,8 +35,19 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/account/orders
- * Create a new VIP purchase order.
- * Body: { planId: '1m' | '12m' }
+ * Create a new VIP purchase order — cart-style: one or more plans, each
+ * with a quantity.
+ *
+ * Body: { items: { planId: '1m' | '12m'; quantity: number }[] }
+ *
+ * There's no per-plan/quantity column on `vip_orders` (see migration
+ * 004) — a cart just collapses to a single amount + months, exactly like
+ * a real bank transfer does. `computeMonthsFromAmount` (already used by
+ * the SePay webhook to translate a paid amount into months) is reused
+ * here so a cart of, say, 2× "1 tháng" + 1× "1 năm" produces the same
+ * `expected_amount` a lone bank transfer of that total would, and the
+ * same greedy years-then-months math decides how many months it's worth
+ * — one source of truth on both the "expected" and "actually paid" sides.
  */
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -39,13 +55,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => ({})) as { planId?: string };
-  const plan = body.planId ? getPlanById(body.planId) : undefined;
-  if (!plan) {
+  const body = await req.json().catch(() => ({})) as { items?: { planId?: string; quantity?: number }[] };
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+
+  if (rawItems.length === 0 || rawItems.length > MAX_LINE_ITEMS) {
     return NextResponse.json(
-      { success: false, error: 'Gói VIP không hợp lệ', plans: VIP_PLANS },
+      { success: false, error: 'Giỏ hàng không hợp lệ', plans: VIP_PLANS },
       { status: 400 }
     );
+  }
+
+  // Validate + resolve every line, merging duplicate planIds so a client
+  // that sends the same plan twice doesn't silently double-count instead
+  // of erroring.
+  const quantityByPlanId = new Map<string, number>();
+  for (const item of rawItems) {
+    const plan = item.planId ? getPlanById(item.planId) : undefined;
+    const quantity = Number(item.quantity);
+    if (!plan || !Number.isInteger(quantity) || quantity < 1 || quantity > MAX_LINE_QUANTITY) {
+      return NextResponse.json(
+        { success: false, error: 'Giỏ hàng không hợp lệ', plans: VIP_PLANS },
+        { status: 400 }
+      );
+    }
+    quantityByPlanId.set(plan.id, (quantityByPlanId.get(plan.id) ?? 0) + quantity);
+  }
+
+  let totalAmount = 0;
+  for (const [planId, quantity] of quantityByPlanId) {
+    const plan = getPlanById(planId)!;
+    totalAmount += plan.price * quantity;
+  }
+
+  const months = computeMonthsFromAmount(totalAmount);
+  if (months <= 0) {
+    return NextResponse.json({ success: false, error: 'Tổng đơn hàng không hợp lệ' }, { status: 400 });
   }
 
   const orderCode = generateOrderCode();
@@ -70,7 +114,7 @@ export async function POST(req: NextRequest) {
            VALUES ($1, $2, $3, $4, $5)
            RETURNING id, user_id, order_code, expected_amount, months, status,
                      bank_transaction_id, paid_amount, created_at, expires_at`,
-          [session.userId, orderCode, plan.price, plan.months, expiresAt]
+          [session.userId, orderCode, totalAmount, months, expiresAt]
         );
         return res.rows[0];
       }

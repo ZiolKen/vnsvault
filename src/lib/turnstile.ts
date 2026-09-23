@@ -23,6 +23,7 @@ export async function verifyTurnstile(token: string | undefined | null, ip?: str
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5555),
     });
 
     const data = await res.json() as { success: boolean; 'error-codes'?: string[] };

@@ -7,7 +7,7 @@
  * to discover which addresses are registered. A token is only actually
  * generated + emailed when the account exists.
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyTurnstile } from '@/lib/turnstile';
 import { sendEmail } from '@/lib/email';
@@ -97,13 +97,29 @@ export async function POST(req: NextRequest) {
         expiresMinutes: RESET_TOKEN_TTL_MINUTES,
       });
 
-      const sent = await sendEmail({ to: user.email, subject, html, text });
-      if (!sent) {
-        // Log for ops visibility, but STILL return the generic success so
-        // the response can't distinguish "no such user" from "mail
-        // provider hiccup".
-        console.error(`[forgot-password] Reset email failed to send for user ${user.id}`);
-      }
+      // Scheduled via after() rather than plain `await`, and rather than a
+      // bare un-awaited `.then()`. Two different problems, one fix:
+      //  1. Awaiting sendEmail() (a real network call to Resend, easily
+      //     200-400ms) would make the "user exists" branch measurably
+      //     slower than the "no such user" branch above (single indexed
+      //     SELECT, returns immediately) even though both paths return the
+      //     identical GENERIC_OK body — that timing gap is itself an
+      //     enumeration oracle, no need to even read the response.
+      //  2. A bare un-awaited promise is NOT safe on Vercel: the function
+      //     can be frozen/torn down the instant the response is returned,
+      //     with no guarantee an in-flight fetch gets to finish — the
+      //     email could just silently never send. after() (same API this
+      //     codebase already uses in games/[slug]/page.tsx for the view-
+      //     count bump) is what actually keeps the invocation alive until
+      //     the callback settles, without adding its latency to the
+      //     response the browser sees.
+      after(() =>
+        sendEmail({ to: user.email, subject, html, text })
+          .then(sent => {
+            if (!sent) console.error(`[forgot-password] Reset email failed to send for user ${user.id}`);
+          })
+          .catch(e => console.error(`[forgot-password] Reset email threw for user ${user.id}`, e))
+      );
     }
 
     return NextResponse.json(GENERIC_OK);

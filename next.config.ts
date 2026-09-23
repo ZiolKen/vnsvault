@@ -1,28 +1,11 @@
 import type { NextConfig } from 'next';
 
-// Cross-account API mirror (see src/lib/apiClient.ts + docs/FALLBACK_DEPLOYMENT.md).
-// Must be added to connect-src or the browser's CSP blocks apiFetch's
-// cross-origin call before it ever leaves the page — independent of, and
-// checked before, any CORS headers the fallback origin itself returns.
-const FALLBACK_ORIGIN = (process.env.NEXT_PUBLIC_FALLBACK_ORIGIN ?? '').replace(/\/$/, '');
-
-const CSP = [
-  "default-src 'self'",
-  // Next.js needs 'unsafe-inline' for styled-jsx/inline bootstrap scripts
-  // unless we move to a nonce-based CSP via middleware.
-  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https:",
-  "font-src 'self'",
-  "frame-src https://challenges.cloudflare.com",
-  `connect-src 'self' https://www.google-analytics.com https://challenges.cloudflare.com${FALLBACK_ORIGIN ? ` ${FALLBACK_ORIGIN}` : ''}`,
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'self'",
-  "upgrade-insecure-requests",
-].join('; ');
-
+// Content-Security-Policy is NOT set here anymore: it now needs a fresh
+// nonce per request (see src/lib/csp.ts), which a static next.config
+// header can't provide. src/middleware.ts builds and sets it on every
+// response instead — setting it both here (static, 'unsafe-inline') and
+// there (per-request, nonced) would just leave two conflicting
+// Content-Security-Policy headers on the response.
 const SECURITY_HEADERS = [
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
@@ -30,7 +13,6 @@ const SECURITY_HEADERS = [
   { key: 'X-Frame-Options',        value: 'SAMEORIGIN' },
   { key: 'Referrer-Policy',        value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy',     value: 'camera=(), microphone=(), geolocation=()' },
-  { key: 'Content-Security-Policy', value: CSP },
 ];
 
 const nextConfig: NextConfig = {

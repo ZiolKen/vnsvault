@@ -24,6 +24,7 @@ export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { safeCompare } from '@/lib/safeCompare';
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -34,8 +35,11 @@ export async function GET(req: NextRequest) {
     }
     console.warn('[GET /api/internal/keep-alive] CRON_SECRET not set — allowing unauthenticated request (dev only).');
   } else {
-    const authHeader = req.headers.get('authorization');
-    if (authHeader !== `Bearer ${secret}`) {
+    // safeCompare (constant-time), not a plain `!==` — same reasoning as
+    // the SePay webhook's auth check: a length/byte-position-dependent
+    // string compare on a secret is a (theoretical) timing side-channel.
+    const authHeader = req.headers.get('authorization') ?? '';
+    if (!safeCompare(authHeader, `Bearer ${secret}`)) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
   }

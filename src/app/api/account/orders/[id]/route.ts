@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/jwt';
 import { db } from '@/lib/db';
 import { buildQrUrl } from '@/lib/vipOrders';
+import { isValidUUID } from '@/lib/utils';
 import type { VipOrder } from '@/types';
 
 /**
@@ -19,6 +20,9 @@ export async function GET(
   }
 
   const { id } = await params;
+  if (!isValidUUID(id)) {
+    return NextResponse.json({ success: false, error: 'Không tìm thấy đơn hàng' }, { status: 404 });
+  }
 
   const rows = await db.fanOut<VipOrder>(
     `SELECT id, user_id, order_code, expected_amount, months, status,

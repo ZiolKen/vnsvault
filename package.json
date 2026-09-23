@@ -9,6 +9,7 @@
     "lint": "next lint --fix",
     "lint:check": "next lint",
     "type-check": "tsc --noEmit",
+    "test": "playwright test",
     "db:setup": "node scripts/db-setup.mjs",
     "db:reset": "node scripts/db-reset.mjs",
     "db:check-genres": "node scripts/check-genre-shards.mjs",
@@ -33,6 +34,7 @@
     "uuid": "^11.0.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/pg": "^8.11.10",
@@ -49,5 +51,10 @@
   "allowScripts": {
     "sharp@0.34.5": true,
     "unrs-resolver@1.12.2": true
+  },
+  "overrides": {
+    "next": {
+      "postcss": "^8.5.28"
+    }
   }
 }

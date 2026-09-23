@@ -17,19 +17,17 @@
  * Content-Security-Policy header — see the "Content Security Policy"
  * guide in the Next.js docs.
  *
- * 'strict-dynamic' lets scripts loaded by a nonce'd <script> (e.g. the
- * gtag.js loader tag) load further scripts of their own without each of
- * those needing a nonce too — this is required for GA/GTM's own dynamic
- * script injection to keep working under a nonce-only policy. Browsers
- * that don't support strict-dynamic simply ignore it and fall back to
- * the host allowlist below, so nothing regresses for older browsers.
+ * We rely on host-based allowlisting ('self', google-analytics, etc.) 
+ * without 'strict-dynamic', so that Cloudflare's injected external scripts
+ * (like email-decode.min.js) can still load from 'self' or Cloudflare domains
+ * without needing a nonce.
  */
 const FALLBACK_ORIGIN = (process.env.NEXT_PUBLIC_FALLBACK_ORIGIN ?? '').replace(/\/$/, '');
 
 export function buildCsp(nonce: string): string {
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com https://static.cloudflareinsights.com`,
+    `script-src 'self' 'nonce-${nonce}' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com https://static.cloudflareinsights.com`,
     // style-src is unchanged for now (still 'unsafe-inline') — this fix is
     // scoped to script-src, which is the directive that actually gates
     // script execution / stored-XSS impact.

@@ -249,7 +249,9 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
             role="dialog"
             aria-modal="true"
             aria-labelledby="vip-checkout-title"
-            className="w-full max-w-sm bg-surface border border-copper/30 rounded-2xl shadow-2xl shadow-black/60 overflow-hidden"
+            className={`w-full bg-surface border border-copper/30 rounded-2xl shadow-2xl shadow-black/60 overflow-hidden ${
+              modal.step === 'paying' ? 'max-w-2xl' : 'max-w-sm'
+            }`}
             onClick={e => e.stopPropagation()}
           >
             {/* Step 1: cart — line items, editable quantity, add more plans */}
@@ -268,37 +270,42 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
                     <p className="px-5 py-6 text-sm text-ghost-dim text-center">Giỏ hàng trống — chọn gói bên dưới để thêm.</p>
                   ) : (
                     cart.map(line => (
-                      <div key={line.plan.id} className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-b-0">
-                        <span className="w-9 h-9 rounded-lg bg-copper/15 flex items-center justify-center text-base shrink-0" aria-hidden="true">👑</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-ghost truncate">{line.plan.label}</p>
-                          <p className="text-xs text-muted">{line.plan.price.toLocaleString('vi-VN')}₫ / gói</p>
+                      <div key={line.plan.id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 px-5 py-3 border-b border-border last:border-b-0">
+                        <div className="flex items-center gap-3 flex-1 min-w-[150px]">
+                          <span className="w-9 h-9 rounded-lg bg-copper/15 flex items-center justify-center text-base shrink-0" aria-hidden="true">👑</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-ghost truncate">{line.plan.label}</p>
+                            <p className="text-xs text-muted">{line.plan.price.toLocaleString('vi-VN')}₫ / gói</p>
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button type="button" onClick={() => changeQuantity(line.plan.id, -1)}
-                            aria-label={`Giảm số lượng ${line.plan.label}`}
-                            className="w-6 h-6 rounded-md border border-border text-ghost-dim hover:text-ghost hover:border-copper/40 flex items-center justify-center text-sm leading-none transition-colors">
-                            −
-                          </button>
-                          <span className="w-5 text-center text-sm text-ghost tabular-nums">{line.quantity}</span>
-                          <button type="button" onClick={() => changeQuantity(line.plan.id, 1)}
-                            disabled={line.quantity >= MAX_LINE_QUANTITY}
-                            aria-label={`Tăng số lượng ${line.plan.label}`}
-                            className="w-6 h-6 rounded-md border border-border text-ghost-dim hover:text-ghost hover:border-copper/40 flex items-center justify-center text-sm leading-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                            +
-                          </button>
+                        <div className="flex items-center justify-between w-full sm:w-auto gap-3">
+                          <div className="flex items-center gap-1.5 shrink-0 pl-12 sm:pl-0">
+                            <button type="button" onClick={() => changeQuantity(line.plan.id, -1)}
+                              aria-label={`Giảm số lượng ${line.plan.label}`}
+                              className="w-6 h-6 rounded-md border border-border text-ghost-dim hover:text-ghost hover:border-copper/40 flex items-center justify-center text-sm leading-none transition-colors">
+                              −
+                            </button>
+                            <span className="w-5 text-center text-sm text-ghost tabular-nums">{line.quantity}</span>
+                            <button type="button" onClick={() => changeQuantity(line.plan.id, 1)}
+                              disabled={line.quantity >= MAX_LINE_QUANTITY}
+                              aria-label={`Tăng số lượng ${line.plan.label}`}
+                              className="w-6 h-6 rounded-md border border-border text-ghost-dim hover:text-ghost hover:border-copper/40 flex items-center justify-center text-sm leading-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                              +
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <p className="text-sm font-semibold text-ghost-dim whitespace-nowrap text-right shrink-0">
+                              {(line.plan.price * line.quantity).toLocaleString('vi-VN')}₫
+                            </p>
+                            <button type="button" onClick={() => removeLine(line.plan.id)}
+                              aria-label={`Xóa ${line.plan.label} khỏi giỏ hàng`}
+                              className="text-ghost-dim hover:text-red-400 text-sm leading-none shrink-0 transition-colors">
+                              ✕
+                            </button>
+                          </div>
                         </div>
-
-                        <p className="text-sm font-semibold text-ghost-dim whitespace-nowrap w-[4.5rem] text-right shrink-0">
-                          {(line.plan.price * line.quantity).toLocaleString('vi-VN')}₫
-                        </p>
-
-                        <button type="button" onClick={() => removeLine(line.plan.id)}
-                          aria-label={`Xóa ${line.plan.label} khỏi giỏ hàng`}
-                          className="text-ghost-dim hover:text-red-400 text-sm leading-none shrink-0 transition-colors">
-                          ✕
-                        </button>
                       </div>
                     ))
                   )}
@@ -351,14 +358,15 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
                     </h3>
                   </div>
 
-                  <div className="px-5 py-4">
-                    <p className="text-sm text-ghost-dim mb-4 text-center">
-                      <span className="font-medium text-ghost">{order.months} tháng VIP</span> —{' '}
-                      <span className="text-copper-light font-semibold">{order.expected_amount.toLocaleString('vi-VN')}₫</span>
-                    </p>
+                  <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Left Column: QR Code & Status */}
+                    <div className="flex flex-col items-center justify-center">
+                      <p className="text-sm text-ghost-dim mb-4 text-center">
+                        <span className="font-medium text-ghost">{order.months} tháng VIP</span> —{' '}
+                        <span className="text-copper-light font-semibold">{order.expected_amount.toLocaleString('vi-VN')}₫</span>
+                      </p>
 
-                    <div className="flex flex-col items-center gap-4 mb-4">
-                      <div className="bg-white rounded-2xl p-3 shadow-xl shadow-black/40">
+                      <div className="bg-white rounded-2xl p-3 shadow-xl shadow-black/40 mb-4">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={order.qrUrl}
@@ -369,7 +377,7 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
                         />
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 mb-2">
                         <span className="text-xs text-muted">Hết hạn trong:</span>
                         <span className={`font-mono text-sm font-bold ${secondsLeft < 120 ? 'text-red-400' : 'text-copper-light'}`}>
                           {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
@@ -385,26 +393,29 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
                       </div>
                     </div>
 
-                    <div className="bg-vault/60 border border-border rounded-lg p-3 text-xs text-ghost-dim leading-relaxed mb-3">
-                      <p className="mb-1">Mã đơn hàng: <code className="text-copper-light font-mono">{order.order_code}</code></p>
-                      <p>Quét mã QR bằng <strong className="text-ghost">MoMo, VietQR, hoặc app ngân hàng</strong>. VIP sẽ được kích hoạt tự động sau khi chuyển khoản.</p>
-                    </div>
+                    {/* Right Column: Info & Warning & Action */}
+                    <div className="flex flex-col">
+                      <div className="bg-vault/60 border border-border rounded-lg p-3 text-sm text-ghost-dim leading-relaxed mb-4">
+                        <p className="mb-2">Mã đơn hàng: <code className="text-copper-light font-mono bg-black/20 px-1 py-0.5 rounded">{order.order_code}</code></p>
+                        <p>Quét mã QR bằng <strong className="text-ghost">MoMo, VietQR, hoặc app ngân hàng</strong>. VIP sẽ được kích hoạt tự động sau khi chuyển khoản.</p>
+                      </div>
 
-                    {/* Do-not-close-the-page warning */}
-                    <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs text-amber-300 leading-relaxed">
-                      <span aria-hidden="true">⚠️</span>
-                      <p><strong>Không tắt hoặc rời khỏi trang này</strong> cho đến khi thanh toán hoàn tất — nếu thoát ra, hệ thống vẫn ghi nhận giao dịch nhưng bạn sẽ không thấy xác nhận ngay.</p>
-                    </div>
-                  </div>
+                      {/* Do-not-close-the-page warning */}
+                      <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm text-amber-300 leading-relaxed mb-6">
+                        <span aria-hidden="true" className="mt-0.5">⚠️</span>
+                        <p><strong>Không tắt hoặc rời khỏi trang này</strong> cho đến khi thanh toán hoàn tất — nếu thoát ra, hệ thống vẫn ghi nhận giao dịch nhưng bạn sẽ không thấy xác nhận ngay.</p>
+                      </div>
 
-                  <div className="px-5 pb-5">
-                    <button
-                      type="button"
-                      onClick={() => cancelOrder(order.id)}
-                      className="w-full py-2.5 text-sm text-muted border border-border rounded-xl hover:text-red-400 hover:border-red-500/30 transition-colors"
-                    >
-                      Hủy giao dịch
-                    </button>
+                      <div className="mt-auto">
+                        <button
+                          type="button"
+                          onClick={() => cancelOrder(order.id)}
+                          className="w-full py-2.5 text-sm text-muted border border-border rounded-xl hover:text-red-400 hover:border-red-500/30 transition-colors"
+                        >
+                          Hủy giao dịch
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </>
               );

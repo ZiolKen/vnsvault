@@ -11,6 +11,7 @@ import { db } from '@/lib/db';
 import { getSessionFromRequest, createToken, setSessionCookie } from '@/lib/jwt';
 import { isFreshAdminRole } from '@/lib/adminGuard';
 import { isPresetAvatar } from '@/lib/avatars';
+import { isHttpUrl } from '@/lib/utils';
 
 const MAX_URL_LEN = 2048;
 
@@ -40,12 +41,34 @@ export async function PATCH(req: NextRequest) {
         { status: 403 }
       );
     }
-    // Admins get a custom URL — still require it to look like a real URL
-    // (absolute http(s) or a site-relative path) rather than arbitrary text.
+    // Admins get a custom URL — restricted to known image-hosting services
+    // rather than any arbitrary http(s) URL, to prevent the avatar from
+    // being used as an SSRF vector via /_next/image (which fetches any URL
+    // whose hostname matches next.config.ts remotePatterns server-side).
     if (isAdmin && !isPresetAvatar(avatarUrl)) {
-      const looksValid = /^https?:\/\/.+/i.test(avatarUrl) || (avatarUrl.startsWith('/') && !avatarUrl.startsWith('//'));
-      if (!looksValid) {
-        return NextResponse.json({ success: false, error: 'URL không hợp lệ' }, { status: 400 });
+      const isSiteRelative = avatarUrl.startsWith('/') && !avatarUrl.startsWith('//');
+      if (!isSiteRelative) {
+        if (!isHttpUrl(avatarUrl)) {
+          return NextResponse.json({ success: false, error: 'URL không hợp lệ' }, { status: 400 });
+        }
+        const ALLOWED_AVATAR_HOSTS = [
+          'i.imgur.com', 'imgur.com',
+          'cdn.discordapp.com', 'media.discordapp.net',
+          'i.ibb.co', 'res.cloudinary.com',
+          'cdn.vnsvault.qzz.io',
+        ];
+        const ALLOWED_SUFFIX = '.supabase.co';
+        try {
+          const host = new URL(avatarUrl).hostname;
+          if (!ALLOWED_AVATAR_HOSTS.includes(host) && !host.endsWith(ALLOWED_SUFFIX)) {
+            return NextResponse.json(
+              { success: false, error: 'Chỉ hỗ trợ URL ảnh từ Imgur, Discord, ibb, Cloudinary, hoặc Supabase' },
+              { status: 400 }
+            );
+          }
+        } catch {
+          return NextResponse.json({ success: false, error: 'URL không hợp lệ' }, { status: 400 });
+        }
       }
     }
 

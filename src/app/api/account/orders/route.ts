@@ -10,6 +10,10 @@ import type { VipOrder } from '@/types';
 const MAX_LINE_QUANTITY = 20;
 const MAX_LINE_ITEMS = VIP_PLANS.length;
 
+class OrderRateLimitError extends Error {
+  constructor() { super('Order rate limit exceeded'); this.name = 'OrderRateLimitError'; }
+}
+
 /**
  * GET /api/account/orders
  * Returns the current user's VIP order history (all statuses), most recent first.
@@ -109,6 +113,19 @@ export async function POST(req: NextRequest) {
           [session.userId]
         );
 
+        // Rate-limit: prevent automated order spam — a stolen session
+        // token could otherwise flood the vip_orders table. 5 orders per
+        // hour is generous for legitimate use (a user changing their mind
+        // a few times) while blocking sustained automated abuse.
+        const recentRes = await client.query(
+          `SELECT COUNT(*)::int AS cnt FROM vip_orders
+           WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+          [session.userId]
+        );
+        if ((recentRes.rows[0]?.cnt ?? 0) >= 5) {
+          throw new OrderRateLimitError();
+        }
+
         const res = await client.query<VipOrder>(
           `INSERT INTO vip_orders (user_id, order_code, expected_amount, months, expires_at)
            VALUES ($1, $2, $3, $4, $5)
@@ -128,6 +145,12 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (e) {
+    if (e instanceof OrderRateLimitError) {
+      return NextResponse.json(
+        { success: false, error: 'Bạn đã tạo quá nhiều đơn hàng gần đây. Vui lòng thử lại sau.' },
+        { status: 429 }
+      );
+    }
     console.error('[POST /api/account/orders]', e);
     return NextResponse.json({ success: false, error: 'Lỗi tạo đơn hàng' }, { status: 500 });
   }

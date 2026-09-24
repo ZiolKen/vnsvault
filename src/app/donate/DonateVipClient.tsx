@@ -221,7 +221,7 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
 
         {isLoggedIn && (
           <div className="bg-vault/60 border border-border rounded-lg p-3.5 text-xs text-ghost-dim leading-relaxed mb-4">
-            Bấm vào (các) gói bạn muốn mua để xem lại giỏ hàng — có thể chỉnh số lượng hoặc thêm gói khác trước khi thanh toán. Hệ thống sẽ tạo mã QR riêng cho bạn — quét bằng <strong className="text-ghost">MoMo, VietQR</strong> hoặc bất kỳ ứng dụng ngân hàng nào. VIP sẽ được <strong className="text-ghost">kích hoạt tự động</strong> trong vài giây sau khi chuyển khoản.
+            Bấm vào gói bạn muốn mua để xem giỏ hàng — có thể chỉnh số lượng hoặc thêm gói khác trước khi thanh toán. VIP sẽ được <strong className="text-ghost">kích hoạt tự động</strong> trong vài giây sau khi chuyển khoản.
           </div>
         )}
 
@@ -403,7 +403,7 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
                       {/* Do-not-close-the-page warning */}
                       <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm text-amber-300 leading-relaxed mb-6">
                         <span aria-hidden="true" className="mt-0.5">⚠️</span>
-                        <p><strong>Không tắt hoặc rời khỏi trang này</strong> cho đến khi thanh toán hoàn tất — nếu thoát ra, hệ thống vẫn ghi nhận giao dịch nhưng bạn sẽ không thấy xác nhận ngay.</p>
+                        <p><strong>Không tắt hoặc rời khỏi trang này</strong> cho đến khi thanh toán hoàn tất.</p>
                       </div>
 
                       <div className="mt-auto">

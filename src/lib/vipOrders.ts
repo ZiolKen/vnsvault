@@ -35,10 +35,20 @@ const CODE_PREFIX = 'VNS';
 const CODE_RANDOM_LENGTH = 6;
 
 export function generateOrderCode(): string {
-  const bytes = crypto.randomBytes(CODE_RANDOM_LENGTH);
+  // Rejection sampling: discard random bytes that would introduce modulo
+  // bias (256 % 28 = 4, so a plain `byte % 28` over-represents the first
+  // 4 alphabet positions by ~11%). Discarding bytes >= 252 (the largest
+  // multiple of 28 that fits in a byte) makes the distribution perfectly
+  // uniform. The expected number of attempts per character is 256/252 ≈
+  // 1.016, so this is effectively free.
+  const maxUnbiased = 256 - (256 % CODE_ALPHABET.length); // 252
   let code = CODE_PREFIX;
   for (let i = 0; i < CODE_RANDOM_LENGTH; i++) {
-    code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+    let r: number;
+    do {
+      r = crypto.randomBytes(1)[0];
+    } while (r >= maxUnbiased);
+    code += CODE_ALPHABET[r % CODE_ALPHABET.length];
   }
   return code;
 }

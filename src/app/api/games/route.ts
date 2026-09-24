@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { cached, SHORT_CACHE_TTL_SECONDS } from '@/lib/redis';
+import { escapeLike } from '@/lib/utils';
 import type { Game } from '@/types';
 
 export async function GET(req: NextRequest) {
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
     if (featured === 'true') { conditions.push('g.is_featured = TRUE'); }
     if (search)   {
       conditions.push(`(g.title ILIKE $${idx} OR g.developer ILIKE $${idx} OR g.description ILIKE $${idx})`);
-      values.push(`%${search}%`); idx++;
+      values.push(`%${escapeLike(search)}%`); idx++;
     }
     if (genre) {
       conditions.push(

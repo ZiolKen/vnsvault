@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireFreshAdmin } from '@/lib/adminGuard';
 import { computeVipStatus } from '@/lib/vip';
+import { escapeLike } from '@/lib/utils';
 
 async function requireAdmin(req: NextRequest) {
   return requireFreshAdmin(req);
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
   const values: unknown[] = [];
   let idx = 1;
 
-  if (q) { conditions.push(`(username ILIKE $${idx} OR email ILIKE $${idx})`); values.push(`%${q}%`); idx++; }
+  if (q) { conditions.push(`(username ILIKE $${idx} OR email ILIKE $${idx})`); values.push(`%${escapeLike(q)}%`); idx++; }
   if (filter === 'vip')   conditions.push(VIP_NOW_SQL);
   if (filter === 'novip') conditions.push(`NOT ${VIP_NOW_SQL}`);
   if (filter === 'admin') conditions.push(`role = 'admin'`);

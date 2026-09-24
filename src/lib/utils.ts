@@ -182,6 +182,14 @@ export function safeJsonLd(data: unknown): string {
 }
 
 /**
+ * Escape SQL LIKE/ILIKE special characters so user input is matched
+ * literally when used inside a `%...%` pattern.
+ */
+export function escapeLike(s: string): string {
+  return s.replace(/[%_\\]/g, '\\$&');
+}
+
+/**
  * True only for absolute http(s) URLs. Use to whitelist any URL that will
  * later be used as an href/src an end user can click/load (download links,
  * cover/banner images, avatars) — without this, a `javascript:` or `data:`

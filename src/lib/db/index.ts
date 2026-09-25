@@ -182,23 +182,17 @@ class ShardedDb {
           ssl: ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: false },
           // Vercel serverless: each function instance is short-lived and
           // isolated — a large pool wastes connections. Crucially, pools
-          // do NOT share connections ACROSS instances: when traffic scales
-          // horizontally, Vercel spins up multiple concurrent function
-          // instances, each importing this module fresh and creating its
-          // OWN pool. `max` only caps connections *within one instance* —
-          // aggregate usage across N concurrently-running instances is
-          // N × max × shards, which is how a `max` that looks conservative
-          // here can still blow past Aiven's max_connections (typically 20
-          // on hobby plans) under real concurrent traffic. Kept at 2 (down
-          // from 3) as a tighter ceiling on that multiplier; the queries
-          // that used to need 3 connections to one shard at once
-          // (getGameBySlug's genres/downloads/bookmark-count) now run
-          // sequentially over a single pinned connection instead (see
-          // withRowTransaction usage in queries.ts), so 2 is enough
-          // headroom for the remaining genuinely-concurrent fanOut call
-          // sites (e.g. the homepage's two Promise.all'd queries) without
-          // raising the per-instance ceiling further.
-          max: 5,
+          // Vercel function instances do NOT share connections ACROSS
+          // instances: each import creates its own pool. Aggregate usage
+          // across N concurrent instances is N × max × shards. With
+          // Supabase's Supavisor connection pooler sitting in front of
+          // PostgreSQL, this is no longer constrained by a hard
+          // max_connections ceiling (the old Aiven hobby plan had 20) —
+          // Supavisor multiplexes app-side connections onto a smaller
+          // set of real PG connections, so a generous per-instance max
+          // here just means faster local concurrency without risking
+          // connection-refused errors under traffic spikes.
+          max: 15,
           idleTimeoutMillis: 10_000,
           // Raised from 5s to 8s: with `max` lower, a request needing 2+
           // connections from the same shard's pool at once (still happens

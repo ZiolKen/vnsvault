@@ -249,8 +249,8 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
             role="dialog"
             aria-modal="true"
             aria-labelledby="vip-checkout-title"
-            className={`w-full bg-surface border border-copper/30 rounded-2xl shadow-2xl shadow-black/60 overflow-hidden ${
-              modal.step === 'paying' ? 'max-w-2xl' : 'max-w-sm'
+            className={`w-full max-h-[calc(100dvh-2rem)] overflow-y-auto bg-surface border border-copper/30 rounded-2xl shadow-2xl shadow-black/60 ${
+              modal.step === 'paying' ? 'max-w-lg' : 'max-w-sm'
             }`}
             onClick={e => e.stopPropagation()}
           >
@@ -358,7 +358,7 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
                     </h3>
                   </div>
 
-                  <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Left Column: QR Code & Status */}
                     <div className="flex flex-col items-center justify-center">
                       <p className="text-sm text-ghost-dim mb-4 text-center">
@@ -366,13 +366,13 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
                         <span className="text-copper-light font-semibold">{order.expected_amount.toLocaleString('vi-VN')}₫</span>
                       </p>
 
-                      <div className="bg-white rounded-2xl p-3 shadow-xl shadow-black/40 mb-4">
+                      <div className="bg-white rounded-2xl p-2 shadow-xl shadow-black/40 mb-4">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={order.qrUrl}
                           alt="Mã QR thanh toán VIP VNSVault"
-                          width={220}
-                          height={260}
+                          width={180}
+                          height={220}
                           className="rounded-lg"
                         />
                       </div>
@@ -401,7 +401,7 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
                       </div>
 
                       {/* Do-not-close-the-page warning */}
-                      <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm text-amber-300 leading-relaxed mb-6">
+                      <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm text-amber-300 leading-relaxed mb-3">
                         <span aria-hidden="true" className="mt-0.5">⚠️</span>
                         <p><strong>Không tắt hoặc rời khỏi trang này</strong> cho đến khi thanh toán hoàn tất.</p>
                       </div>

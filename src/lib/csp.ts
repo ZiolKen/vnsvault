@@ -35,7 +35,7 @@ export function buildCsp(nonce: string): string {
     "img-src 'self' data: blob: https:",
     "font-src 'self'",
     "frame-src https://challenges.cloudflare.com",
-    `connect-src 'self' https://www.google-analytics.com https://challenges.cloudflare.com https://cloudflareinsights.com${FALLBACK_ORIGIN ? ` ${FALLBACK_ORIGIN}` : ''}`,
+    `connect-src 'self' https://www.google-analytics.com https://challenges.cloudflare.com https://cloudflareinsights.com https://static.cloudflareinsights.com${FALLBACK_ORIGIN ? ` ${FALLBACK_ORIGIN}` : ''}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

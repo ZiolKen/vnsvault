@@ -292,7 +292,7 @@ export async function middleware(req: NextRequest) {
     return withPrivateHeaders(redirect);
   }
 
-  return withPrivateHeaders(nextWithNonce());
+  return withPrivateHeaders(withCors(nextWithNonce(), req));
 }
 
 export const config = {

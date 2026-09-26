@@ -16,11 +16,13 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [tsToken, setTsToken] = useState('');
+  const [tsKey, setTsKey] = useState(0);
   const router = useRouter();
   const toast = useToast();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!tsToken) return;
     setError('');
     if (form.password.length < 6) { setError('Mật khẩu cần ít nhất 6 ký tự'); return; }
     setLoading(true);
@@ -41,7 +43,15 @@ export default function RegisterPage() {
         router.refresh();
         refreshNavUser();
       }
-      else setError(d.error ?? 'Đăng ký thất bại');
+      else {
+        setError(d.error ?? 'Đăng ký thất bại');
+        setTsToken('');
+        setTsKey(k => k + 1);
+      }
+    } catch {
+      setError('Lỗi kết nối');
+      setTsToken('');
+      setTsKey(k => k + 1);
     } finally { setLoading(false); }
   };
 
@@ -145,12 +155,13 @@ export default function RegisterPage() {
                 down mid-layout — exactly the CLS Speed Insights flagged on
                 this route. */}
             <TurnstileWidget
+              key={tsKey}
               onToken={setTsToken}
               onExpire={() => setTsToken('')}
               className="flex justify-center min-h-[65px]"
             />
 
-            <Button type="submit" loading={loading} loadingText="Đang tạo tài khoản..." fullWidth className="mt-1">
+            <Button type="submit" disabled={!tsToken} loading={loading} loadingText="Đang tạo tài khoản..." fullWidth className="mt-1">
               Đăng Ký Tài Khoản
             </Button>
           </form>

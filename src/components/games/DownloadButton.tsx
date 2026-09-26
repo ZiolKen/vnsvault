@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { platformLabel } from '@/lib/utils';
 import type { Platform } from '@/types';
+import { useGameAuth } from '@/components/games/GameAuthProvider';
 
 interface DownloadLink {
   id: string;
@@ -35,7 +36,9 @@ interface Props {
  * working link.id-based href in the first place (see games/[slug]/page.tsx),
  * so this renders a "Đăng nhập để tải" CTA instead.
  */
-export default function DownloadButton({ gameSlug, platform, link, gameTitle, loggedIn }: Props) {
+export default function DownloadButton({ gameSlug, platform, link, gameTitle, loggedIn: loggedInProp }: Props) {
+  const auth = useGameAuth();
+  const loggedIn = loggedInProp || auth.loggedIn;
   const displayLabel = link.label?.trim() || 'Link tải';
 
   if (!loggedIn) {

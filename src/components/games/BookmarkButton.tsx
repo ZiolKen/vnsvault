@@ -1,7 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/apiClient';
+import { useGameAuth } from '@/components/games/GameAuthProvider';
 
 interface Props {
   gameSlug: string;
@@ -13,14 +14,30 @@ interface Props {
   onToggled?: (bookmarked: boolean) => void;
 }
 
-export default function BookmarkButton({ gameSlug, initialBookmarked, loggedIn, variant = 'button', onToggled }: Props) {
+export default function BookmarkButton({ gameSlug, initialBookmarked, loggedIn: loggedInProp, variant = 'button', onToggled }: Props) {
+  const auth = useGameAuth();
+  const loggedIn = loggedInProp || auth.loggedIn;
   const [bookmarked, setBookmarked] = useState(initialBookmarked);
   const [pending, setPending] = useState(false);
   const router = useRouter();
 
+  useEffect(() => {
+    // If the server didn't know the session (loggedInProp is false) but the
+    // client auth context resolved to loggedIn, we need to fetch the real
+    // bookmark status (because initialBookmarked was defaulted to false).
+    if (!loggedInProp && auth.loggedIn) {
+      apiFetch(`/api/games/${gameSlug}/bookmark`)
+        .then(r => r.json())
+        .then(d => { if (d.success) setBookmarked(d.data.bookmarked); })
+        .catch(() => {});
+    }
+  }, [loggedInProp, auth.loggedIn, gameSlug]);
+
   const toggle = async () => {
+    // Wait for auth to resolve before redirecting. If they click really fast
+    // while we're checking /api/auth/me, do nothing until ready.
     if (!loggedIn) {
-      router.push(`/login?redirect=/games/${gameSlug}`);
+      if (auth.ready) router.push(`/login?redirect=/games/${gameSlug}`);
       return;
     }
     if (pending) return;

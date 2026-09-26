@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
 import { after } from 'next/server';
-import { headers } from 'next/headers';
 import { cache } from 'react';
 import type { Metadata } from 'next';
 import Image from 'next/image';
@@ -15,12 +14,29 @@ import BookmarkButton from '@/components/games/BookmarkButton';
 import ReportLinkButton from '@/components/games/ReportLinkButton';
 import DetailTabs from '@/components/games/DetailTabs';
 import TranslatorNote from '@/components/games/TranslatorNote';
-import { getGameBySlug, isBookmarkedByUser, bumpGameViewCount } from '@/lib/queries';
-import { getSession } from '@/lib/jwt';
+import { GameAuthProvider } from '@/components/games/GameAuthProvider';
+import { getGameBySlug, bumpGameViewCount } from '@/lib/queries';
 
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
 interface Props { params: Promise<{ slug: string }> }
 const getGame = cache(async (slug: string) => getGameBySlug(slug));
+
+// ── ISR ─────────────────────────────────────────────────────────────────
+// Revalidate every 2 minutes. The underlying getGameBySlug is already
+// Redis-cached for 60s (see SHORT_CACHE_TTL_SECONDS in lib/redis.ts),
+// so even on an ISR cache miss the DB fan-out is unlikely. Combined,
+// hot game pages are served from Vercel's edge cache for up to 2 min,
+// then regenerated in the background — zero DB/CPU cost on the request
+// path for the vast majority of visitors.
+//
+// Per-user concerns (login state, bookmark status) are NOT server-
+// rendered — they hydrate client-side via GameAuthProvider. The page
+// always ships the logged-out fallback to bots and first-paint, then
+// BookmarkButton / DownloadButton self-upgrade once /api/auth/me
+// resolves (~100ms after JS loads). This tradeoff is why the page can
+// be ISR-cacheable in the first place: game content is public, and the
+// thin per-user shell is deferred to the client.
+export const revalidate = 120;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
@@ -41,37 +57,30 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 
-function GameJsonLd({ game, slug, nonce }: { game: Game; slug: string; nonce?: string }) {
+// `type="application/ld+json"` is NOT executable — browsers treat it as
+// pure data, so CSP's script-src nonce requirement does NOT apply.
+// Removing `nonce` here lets the page drop its `headers()` dependency,
+// which was the last dynamic API preventing ISR.
+function GameJsonLd({ game, slug }: { game: Game; slug: string }) {
   const url = `${BASE}/games/${slug}`;
   return (
     <>
-      <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: safeJsonLd({ '@context': 'https://schema.org', '@type': 'VideoGame', name: game.title, description: game.description?.slice(0, 500) ?? '', url, image: game.cover_url ?? undefined, genre: game.genres?.map(g => g.name) ?? [], applicationCategory: 'Game', inLanguage: 'vi', offers: { '@type': 'Offer', price: '0', priceCurrency: 'VND', availability: 'https://schema.org/InStock' }, datePublished: game.created_at, dateModified: game.updated_at, publisher: { '@type': 'Organization', name: 'VNSVault', url: BASE } }) }} />
-      <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: safeJsonLd({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Trang chủ', item: BASE }, { '@type': 'ListItem', position: 2, name: 'Thư Viện', item: `${BASE}/games` }, { '@type': 'ListItem', position: 3, name: game.title, item: url }] }) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd({ '@context': 'https://schema.org', '@type': 'VideoGame', name: game.title, description: game.description?.slice(0, 500) ?? '', url, image: game.cover_url ?? undefined, genre: game.genres?.map(g => g.name) ?? [], applicationCategory: 'Game', inLanguage: 'vi', offers: { '@type': 'Offer', price: '0', priceCurrency: 'VND', availability: 'https://schema.org/InStock' }, datePublished: game.created_at, dateModified: game.updated_at, publisher: { '@type': 'Organization', name: 'VNSVault', url: BASE } }) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Trang chủ', item: BASE }, { '@type': 'ListItem', position: 2, name: 'Thư Viện', item: `${BASE}/games` }, { '@type': 'ListItem', position: 3, name: game.title, item: url }] }) }} />
     </>
   );
 }
 
 export default async function GameDetailPage({ params }: Props) {
   const { slug } = await params;
-  const [game, session, nonce] = await Promise.all([
-    getGame(slug),
-    getSession(),
-    headers().then(h => h.get('x-nonce') ?? undefined),
-  ]);
+  const game = await getGame(slug);
   if (!game) notFound();
 
-  const loggedIn = Boolean(session);
-  const userBookmarked = loggedIn ? await isBookmarkedByUser(game.id, session!.userId) : false;
-
-  // Deliberately NOT awaited on the request path: bumpGameViewCount does a
-  // real write (fanOut UPDATE across all 3 Supabase shards), which on a
-  // cold serverless invocation means 3 fresh TCP+TLS handshakes before the
-  // page could render — this was the main contributor to the >1s TTFB seen
-  // in Speed Insights on /games/[slug] routes. `after()` schedules it to
-  // run once the response has already been streamed to the browser, so the
-  // analytics write no longer sits on the critical path. Safe to "fire and
-  // forget" here since it's a best-effort counter, not something the page
-  // itself needs to read back.
+  // Fires once per ISR regen (every ~2 min per slug) — a best-effort
+  // counter, not exact per-visit. Acceptable tradeoff: view_count was
+  // already approximate due to the 60s Redis cache on getGameBySlug,
+  // and moving from "bump every request" to "bump every regen" cuts
+  // write traffic dramatically under load.
   after(() => bumpGameViewCount(game.id));
 
   // SECURITY: the real download URL is never sent to the browser anymore,
@@ -112,7 +121,7 @@ export default async function GameDetailPage({ params }: Props) {
       <h2 className="font-heading text-xl font-bold text-ghost mb-1">Liên Kết Tải Bản Việt Hóa</h2>
       <p className="text-sm text-ghost-dim mb-5 leading-relaxed">
         Mọi liên kết tải xuống đều được kiểm tra và cam kết an toàn.{' '}
-        {!loggedIn && <><Link href={`/login?redirect=/games/${slug}`} className="text-copper-light underline hover:text-copper">Đăng nhập</Link> để truy cập link tải.</>}
+        <Link href={`/login?redirect=/games/${slug}`} className="text-copper-light underline hover:text-copper">Đăng nhập</Link> để truy cập link tải.
       </p>
 
       {downloads.length === 0 ? (
@@ -129,7 +138,7 @@ export default async function GameDetailPage({ params }: Props) {
                       <p className="text-sm font-medium text-ghost">{link.label?.trim() || 'Link tải'}</p>
                       <p className="text-xs text-muted">Phiên bản {link.version}</p>
                     </div>
-                    <DownloadButton gameSlug={game.slug} platform={platform as Platform} link={link} gameTitle={game.title} loggedIn={loggedIn} />
+                    <DownloadButton gameSlug={game.slug} platform={platform as Platform} link={link} gameTitle={game.title} loggedIn={false} />
                   </div>
                 ))}
               </div>
@@ -157,8 +166,8 @@ export default async function GameDetailPage({ params }: Props) {
   );
 
   return (
-    <>
-      <GameJsonLd game={game} slug={slug} nonce={nonce} />
+    <GameAuthProvider>
+      <GameJsonLd game={game} slug={slug} />
       <main className="pt-16 flex-1" id="main-content">
 
         {/* ── HERO ── */}
@@ -235,7 +244,7 @@ export default async function GameDetailPage({ params }: Props) {
                       <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                       TẢI GAME BẢN DỊCH
                     </a>
-                    <BookmarkButton gameSlug={slug} initialBookmarked={userBookmarked} loggedIn={loggedIn} />
+                    <BookmarkButton gameSlug={slug} initialBookmarked={false} loggedIn={false} />
                     <ReportLinkButton gameSlug={game.slug} gameTitle={game.title} downloads={downloads.map(d => ({ id: d.id, version: d.version, platform: d.platform, label: d.label }))} variant="button" />
                   </div>
                 </div>
@@ -294,6 +303,6 @@ export default async function GameDetailPage({ params }: Props) {
           </div>
         </div>
       </main>
-    </>
+    </GameAuthProvider>
   );
 }

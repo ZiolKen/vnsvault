@@ -15,12 +15,14 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [tsToken, setTsToken] = useState('');
+  const [tsKey, setTsKey] = useState(0);
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect');
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!tsToken) return;
     setError('');
     setLoading(true);
     try {
@@ -42,7 +44,15 @@ function LoginForm() {
         router.refresh();
         refreshNavUser();
       }
-      else setError(d.error ?? 'Đăng nhập thất bại');
+      else {
+        setError(d.error ?? 'Đăng nhập thất bại');
+        setTsToken('');
+        setTsKey(k => k + 1);
+      }
+    } catch {
+      setError('Lỗi kết nối');
+      setTsToken('');
+      setTsKey(k => k + 1);
     } finally { setLoading(false); }
   };
 
@@ -120,12 +130,13 @@ function LoginForm() {
 
             {/* Turnstile */}
             <TurnstileWidget
+              key={tsKey}
               onToken={setTsToken}
               onExpire={() => setTsToken('')}
-              className="flex justify-center"
+              className="flex justify-center min-h-[65px]"
             />
 
-            <Button type="submit" loading={loading} loadingText="Đang đăng nhập..." fullWidth className="mt-1">
+            <Button type="submit" loading={loading} disabled={!tsToken} loadingText="Đang đăng nhập..." fullWidth className="mt-1">
               Đăng Nhập
             </Button>
           </form>

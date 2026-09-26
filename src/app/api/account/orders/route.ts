@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/jwt';
 import { db } from '@/lib/db';
 import { generateOrderCode, getPlanById, ORDER_EXPIRY_MS, buildQrUrl, VIP_PLANS, computeMonthsFromAmount } from '@/lib/vipOrders';
+import { verifyTurnstile } from '@/lib/turnstile';
 import type { VipOrder } from '@/types';
 
 /** Sanity caps on a single checkout — generous, but keeps a typo/bad
@@ -12,6 +13,15 @@ const MAX_LINE_ITEMS = VIP_PLANS.length;
 
 class OrderRateLimitError extends Error {
   constructor() { super('Order rate limit exceeded'); this.name = 'OrderRateLimitError'; }
+}
+
+class PendingOrderExistsError extends Error {
+  pendingOrderId: string;
+  constructor(pendingOrderId: string) {
+    super('PENDING_EXISTS');
+    this.name = 'PendingOrderExistsError';
+    this.pendingOrderId = pendingOrderId;
+  }
 }
 
 /**
@@ -42,7 +52,7 @@ export async function GET(req: NextRequest) {
  * Create a new VIP purchase order — cart-style: one or more plans, each
  * with a quantity.
  *
- * Body: { items: { planId: '1m' | '12m'; quantity: number }[] }
+ * Body: { items: { planId: '1m' | '12m'; quantity: number }[], tsToken?: string }
  *
  * There's no per-plan/quantity column on `vip_orders` (see migration
  * 004) — a cart just collapses to a single amount + months, exactly like
@@ -59,8 +69,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => ({})) as { items?: { planId?: string; quantity?: number }[] };
+  const body = await req.json().catch(() => ({})) as { items?: { planId?: string; quantity?: number }[], tsToken?: string };
   const rawItems = Array.isArray(body.items) ? body.items : [];
+
+  const ip = req.headers.get('cf-connecting-ip') ?? req.headers.get('x-forwarded-for') ?? undefined;
+  const tsOk = await verifyTurnstile(body.tsToken, ip);
+  if (!tsOk) {
+    return NextResponse.json({ success: false, error: 'Xác minh bảo mật thất bại. Vui lòng thử lại.' }, { status: 403 });
+  }
 
   if (rawItems.length === 0 || rawItems.length > MAX_LINE_ITEMS) {
     return NextResponse.json(
@@ -105,13 +121,17 @@ export async function POST(req: NextRequest) {
     const order = await db.withRowTransaction<VipOrder>(
       'users', 'id', session.userId,
       async (client) => {
-        // Cancel any existing pending orders for this user (only one
-        // active checkout at a time).
-        await client.query(
-          `UPDATE vip_orders SET status = 'cancelled'
-           WHERE user_id = $1 AND status = 'pending'`,
+        // Check if there is already a pending order.
+        // Instead of automatically cancelling it (which causes a race condition if the user
+        // just paid and the webhook is on its way), we enforce one active checkout by
+        // asking the user to complete or cancel it first.
+        const pendingRes = await client.query(
+          `SELECT id FROM vip_orders WHERE user_id = $1 AND status = 'pending'`,
           [session.userId]
         );
+        if (pendingRes.rows.length > 0) {
+          throw new PendingOrderExistsError(pendingRes.rows[0].id);
+        }
 
         // Rate-limit: prevent automated order spam — a stolen session
         // token could otherwise flood the vip_orders table. 5 orders per
@@ -119,7 +139,7 @@ export async function POST(req: NextRequest) {
         // a few times) while blocking sustained automated abuse.
         const recentRes = await client.query(
           `SELECT COUNT(*)::int AS cnt FROM vip_orders
-           WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+           WHERE user_id = $1 AND status != 'cancelled' AND created_at > NOW() - INTERVAL '1 hour'`,
           [session.userId]
         );
         if ((recentRes.rows[0]?.cnt ?? 0) >= 5) {
@@ -145,6 +165,16 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (e) {
+    if (e instanceof PendingOrderExistsError) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Bạn đang có một giao dịch chưa hoàn tất. Vui lòng thanh toán hoặc hủy giao dịch đó trước khi tạo mới.',
+          pendingOrderId: e.pendingOrderId
+        },
+        { status: 400 }
+      );
+    }
     if (e instanceof OrderRateLimitError) {
       return NextResponse.json(
         { success: false, error: 'Bạn đã tạo quá nhiều đơn hàng gần đây. Vui lòng thử lại sau.' },

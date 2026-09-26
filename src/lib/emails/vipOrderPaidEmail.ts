@@ -50,6 +50,7 @@ export function vipOrderPaidEmail(opts: VipOrderPaidEmailOptions): {
   const paidAtLabel = new Date(paidAt).toLocaleString('vi-VN', {
     dateStyle: 'medium',
     timeStyle: 'short',
+    timeZone: 'Asia/Ho_Chi_Minh',
   });
 
   const subject = 'Xác nhận đơn hàng VIP — VNSVault';

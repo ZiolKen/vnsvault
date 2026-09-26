@@ -42,6 +42,7 @@ export default function ReportLinkButton({ gameSlug, gameTitle, downloads, varia
   const [downloadId, setDownloadId] = useState('');
   const [reason, setReason] = useState('');
   const [tsToken, setTsToken] = useState('');
+  const [tsKey, setTsKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -68,6 +69,8 @@ export default function ReportLinkButton({ gameSlug, gameTitle, downloads, varia
       const d = await r.json().catch(() => null);
       if (!r.ok || !d?.success) {
         setError(d?.error ?? 'Gửi báo cáo thất bại, vui lòng thử lại.');
+        setTsToken('');
+        setTsKey(k => k + 1);
         setSubmitting(false);
         return;
       }
@@ -76,6 +79,8 @@ export default function ReportLinkButton({ gameSlug, gameTitle, downloads, varia
       setTimeout(reset, 2200);
     } catch {
       setError('Lỗi kết nối, vui lòng thử lại.');
+      setTsToken('');
+      setTsKey(k => k + 1);
       setSubmitting(false);
     }
   };
@@ -186,7 +191,7 @@ export default function ReportLinkButton({ gameSlug, gameTitle, downloads, varia
                 </div>
 
                 <div className="flex justify-center min-h-[65px] items-center">
-                  <TurnstileWidget onToken={setTsToken} onExpire={() => setTsToken('')} />
+                  <TurnstileWidget key={tsKey} onToken={setTsToken} onExpire={() => setTsToken('')} />
                 </div>
 
                 <button

@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/apiClient';
+import { TurnstileWidget } from '@/components/ui/TurnstileWidget';
 import type { VipPlan, VipOrder } from '@/types';
 
 // ─── Plan definitions (mirrored from server, kept minimal) ──────────
@@ -34,6 +35,9 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
   const [modal, setModal] = useState<ModalState>({ step: 'closed' });
   const [cart, setCart] = useState<CartLine[]>([]);
   const [error, setError] = useState('');
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [tsToken, setTsToken] = useState('');
+  const [tsKey, setTsKey] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -49,7 +53,10 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
   // auto-expiry) — the cart resets, so the next plan click starts a fresh
   // checkout rather than resuming a stale one.
   useEffect(() => {
-    if (modal.step === 'closed') setCart([]);
+    if (modal.step === 'closed') {
+      setCart([]);
+      setTsToken('');
+    }
   }, [modal.step]);
 
   // Extra safety net on top of the on-screen warning: while a payment is
@@ -97,7 +104,7 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
   }, []);
 
   const startCheckout = useCallback(async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || !tsToken) return;
     setModal({ step: 'creating' });
     try {
       const res = await apiFetch('/api/account/orders', {
@@ -105,14 +112,19 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: cart.map(l => ({ planId: l.plan.id, quantity: l.quantity })),
+          tsToken,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         setError(data.error ?? 'Lỗi tạo đơn hàng');
-        setModal({ step: 'closed' });
+        if (data.pendingOrderId) setPendingOrderId(data.pendingOrderId);
+        setTsToken('');
+        setTsKey(k => k + 1);
+        setModal({ step: 'review' });
         return;
       }
+      setPendingOrderId(null);
 
       const order = data.data as VipOrder & { qrUrl: string };
       const expiresMs = new Date(order.expires_at).getTime() - Date.now();
@@ -154,9 +166,11 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
       }, 3000);
     } catch {
       setError('Lỗi kết nối');
-      setModal({ step: 'closed' });
+      setTsToken('');
+      setTsKey(k => k + 1);
+      setModal({ step: 'review' });
     }
-  }, [cart]);
+  }, [cart, tsToken]);
 
   const cancelOrder = useCallback(async (orderId: string) => {
     try {
@@ -166,6 +180,15 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
     if (countdownRef.current) clearInterval(countdownRef.current);
     setModal({ step: 'closed' });
   }, []);
+
+  const cancelPendingOrder = useCallback(async () => {
+    if (!pendingOrderId) return;
+    try {
+      await apiFetch(`/api/account/orders/${pendingOrderId}/cancel`, { method: 'POST' });
+      setError('');
+      setPendingOrderId(null);
+    } catch { /* ignore */ }
+  }, [pendingOrderId]);
 
   const cartTotal = cart.reduce((sum, l) => sum + l.plan.price * l.quantity, 0);
 
@@ -266,6 +289,23 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
                 </div>
 
                 <div className="max-h-[45vh] overflow-y-auto">
+                  {error && (
+                    <div className="mx-5 mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400">
+                      {error}
+                      {pendingOrderId && (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={cancelPendingOrder}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-red-500/50 hover:bg-red-500/20 transition-colors"
+                          >
+                            Hủy giao dịch đang chờ
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {cart.length === 0 ? (
                     <p className="px-5 py-6 text-sm text-ghost-dim text-center">Giỏ hàng trống — chọn gói bên dưới để thêm.</p>
                   ) : (
@@ -328,11 +368,18 @@ export default function DonateVipClient({ isLoggedIn }: { isLoggedIn: boolean })
                   </p>
                 </div>
 
+                <div className="px-5 pb-4 flex justify-center min-h-[65px] items-center">
+                  <TurnstileWidget key={tsKey} onToken={setTsToken} onExpire={() => setTsToken('')} />
+                </div>
+
                 <div className="px-5 pb-5">
-                  <button type="button" onClick={startCheckout} disabled={cart.length === 0}
+                  <button type="button" onClick={startCheckout} disabled={cart.length === 0 || !tsToken}
                     className="btn-copper w-full justify-center py-3 disabled:opacity-50 disabled:cursor-not-allowed">
                     Thanh Toán
                   </button>
+                  <p className="text-xs text-dim text-center mt-3">
+                    {tsToken ? 'Bấm "Thanh Toán" để tiếp tục.' : 'Hoàn thành xác minh bên trên trước khi thanh toán.'}
+                  </p>
                 </div>
               </>
             )}

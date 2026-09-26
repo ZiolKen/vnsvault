@@ -3,7 +3,7 @@ import Image from 'next/image';
 import type { Metadata } from 'next';
 import type { CSSProperties } from 'react';
 import GameCard from '@/components/games/GameCard';
-import { formatNumber } from '@/lib/utils';
+import { formatNumber, canOptimizeImage } from '@/lib/utils';
 
 import { getHomepageIndex } from '@/lib/queries';
 
@@ -21,15 +21,7 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 async function getData() {
-  try {
-    return await getHomepageIndex();
-  } catch {
-    return {
-      hotGames: [], featuredGames: [], newGames: [],
-      siteStats: { totalGames: 0, totalDownloads: 0 },
-      generatedAt: new Date().toISOString(),
-    };
-  }
+  return await getHomepageIndex();
 }
 
 export default async function HomePage() {
@@ -119,7 +111,7 @@ export default async function HomePage() {
                     does, keeps it contained regardless of the outer transform. */}
                 <div className="vault-overlay relative aspect-[3/4] overflow-hidden rounded-xl">
                   {hero.cover_url ? (
-                    <Image src={hero.cover_url} alt={`Ảnh bìa ${hero.title}`} fill unoptimized className="object-cover group-hover:scale-105 transition-transform duration-500" sizes="208px" />
+                    <Image src={hero.cover_url} alt={`Ảnh bìa ${hero.title}`} fill unoptimized={!canOptimizeImage(hero.cover_url)} className="object-cover group-hover:scale-105 transition-transform duration-500" sizes="208px" />
                   ) : (
                     <div className="absolute inset-0 bg-vault flex items-center justify-center">
                       <span className="font-cinzel text-3xl text-dim" aria-hidden="true">VN</span>

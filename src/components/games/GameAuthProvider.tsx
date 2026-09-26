@@ -36,7 +36,7 @@ export function GameAuthProvider({ children }: { children: ReactNode }) {
       .then(d => {
         if (cancelled) return;
         setState({
-          loggedIn: Boolean(d?.success && d.data?.id),
+          loggedIn: Boolean(d?.success && d.data?.username),
           ready: true,
         });
       })

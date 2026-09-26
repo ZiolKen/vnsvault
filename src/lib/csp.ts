@@ -7,6 +7,14 @@
  * layout.tsx (escapeHtmlAttr/toScriptLiteral/safeJsonLd) was the only
  * real defense against stored XSS; the CSP added nothing on top of it.
  *
+ * script-src now carries the actual 'nonce-<value>' token (previously
+ * generated and forwarded but never inserted into the header — 'unsafe-
+ * inline' was silently the only thing making inline scripts run, and the
+ * nonce plumbing below was dead weight). Per the CSP spec, a nonce-source
+ * or hash-source present in a directive causes browsers that support it
+ * to ignore any 'unsafe-inline' in that same directive, so it's dropped
+ * here rather than left as inert fallback.
+ *
  * A fresh nonce is generated per-request in middleware.ts, forwarded to
  * the app via the `x-nonce` request header (read with next/headers'
  * `headers()` in Server Components, or `req.headers` in Route Handlers),

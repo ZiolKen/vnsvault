@@ -10,10 +10,7 @@ import type { SessionPayload } from '@/types';
 const jwtSecret = process.env.JWT_SECRET;
 
 if (!jwtSecret) {
-  if (process.env.NODE_ENV === 'production') {
-    // The fallback below is committed in source, so it's effectively
-    // public. Running with it in production would let anyone forge a
-    // valid admin JWT. Refuse to start rather than warn-and-continue.
+  if (process.env.NODE_ENV !== 'development') {
     throw new Error('[FATAL] JWT_SECRET environment variable is not set. Refusing to start.');
   }
   console.warn('[jwt] JWT_SECRET not set — using insecure dev default. NEVER use in production.');

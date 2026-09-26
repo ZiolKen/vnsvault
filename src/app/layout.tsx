@@ -126,9 +126,10 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // Set by middleware.ts per-request and echoed back in the CSP response
-  // header's script-src — must be stamped on every inline <script>/<Script>
-  // below or the browser blocks them under the nonce-based CSP.
+  // Forwarded by middleware.ts as the `x-nonce` request header — must match
+  // the 'nonce-<value>' token stamped into this response's CSP header
+  // (see lib/csp.ts) or the browser silently drops every inline script
+  // below now that script-src no longer carries 'unsafe-inline'.
   const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html

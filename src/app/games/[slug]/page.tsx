@@ -15,6 +15,7 @@ import ReportLinkButton from '@/components/games/ReportLinkButton';
 import DetailTabs from '@/components/games/DetailTabs';
 import TranslatorNote from '@/components/games/TranslatorNote';
 import { GameAuthProvider } from '@/components/games/GameAuthProvider';
+import DownloadAuthMessage from '@/components/games/DownloadAuthMessage';
 import { getGameBySlug, bumpGameViewCount } from '@/lib/queries';
 
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
@@ -119,10 +120,7 @@ export default async function GameDetailPage({ params }: Props) {
   const downloadNode = (
     <div>
       <h2 className="font-heading text-xl font-bold text-ghost mb-1">Liên Kết Tải Bản Việt Hóa</h2>
-      <p className="text-sm text-ghost-dim mb-5 leading-relaxed">
-        Mọi liên kết tải xuống đều được kiểm tra và cam kết an toàn.{' '}
-        <Link href={`/login?redirect=/games/${slug}`} className="text-copper-light underline hover:text-copper">Đăng nhập</Link> để truy cập link tải.
-      </p>
+      <DownloadAuthMessage slug={slug} />
 
       {downloads.length === 0 ? (
         <div className="text-center py-10 text-ghost-dim"><p className="text-4xl mb-3">📦</p><p className="text-sm">Chưa có link tải. Quay lại sau nhé.</p></div>
